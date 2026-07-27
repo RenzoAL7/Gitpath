@@ -91,3 +91,52 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           sbom: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+  update-gitops:
+    name: Propose GitOps image update
+    needs: container
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout K3s-Cortex
+        uses: actions/checkout@v4
+        with:
+          repository: RenzoAL7/K3s-Cortex
+          token: ${{ secrets.CORTEX_REPO_TOKEN }}
+          path: cortex
+          fetch-depth: 1
+
+      - name: Pin the released image SHA
+        working-directory: cortex
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          MANIFEST="apps/gitpath/overlays/prod/kustomization.yaml"
+          test -f "$MANIFEST"
+          sed -i -E "s|^    newTag:.*$|    newTag: ${IMAGE_TAG}|" "$MANIFEST"
+          grep -n "newTag:" "$MANIFEST"
+          git diff --check
+
+      - name: Open GitOps pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.CORTEX_REPO_TOKEN }}
+          path: cortex
+          add-paths: apps/gitpath/overlays/prod/kustomization.yaml
+          # Reuse one promotion branch so a new release updates the pending PR
+          # instead of creating a pile of competing deployment PRs.
+          branch: automation/gitpath-prod
+          delete-branch: true
+          base: main
+          commit-message: "chore(gitpath): deploy sha-${{ github.sha }}"
+          title: "chore(gitpath): deploy sha-${{ github.sha }}"
+          body: |
+            Automated image promotion from `RenzoAL7/Gitpath`.
+
+            - Source commit: `${{ github.sha }}`
+            - Image: `ghcr.io/renzoal7/gitpath:sha-${{ github.sha }}`
+            - Argo CD application: `gitpath-prod`
+
+            Merge this PR to let Argo CD synchronize the production workload.
