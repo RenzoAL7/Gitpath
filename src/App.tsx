@@ -52,7 +52,7 @@ function App() {
       <section className="hero shell" id="inicio">
         <div className="hero-copy">
           <Pill>RUTA 01 · FUNDAMENTOS</Pill>
-          <h1>Aprende Git sin perderte en el camino<span className="accent">.</span></h1>
+          <h1>Aprende Git sin perderte en el camino. - Deploy automático verificado.<span className="accent">.</span></h1>
           <p className="hero-lede">Una ruta práctica para pasar de “no sé por dónde empezar” a trabajar con ramas, commits y pull requests con confianza.</p>
           <div className="hero-actions">
             <a className="button button-primary" href="#ruta">Comenzar la ruta <Icon name="arrow" size={17} /></a>
