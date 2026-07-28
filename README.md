@@ -13,6 +13,7 @@ La inspiración conceptual es [Learn Git Branching](https://github.com/pcottle/l
 - Progreso persistido localmente con `localStorage`, sin enviar datos personales.
 - Casos de fallo con síntoma, riesgo y comando de rescate.
 - Build reproducible con Docker, Nginx, GitHub Actions, GHCR y promoción GitOps hacia K3s.
+- Suite de comportamiento con Node test runner para validar el orden y el resultado de los comandos.
 
 ## Arquitectura actual
 
@@ -46,7 +47,7 @@ npm run build
 
 ## CI/CD
 
-Cada pull request hacia `main` instala las dependencias, ejecuta el audit de producción y valida el build de frontend y la imagen Docker.
+Cada pull request hacia `main` instala las dependencias, ejecuta el audit de producción, los tests del simulador y valida el build de frontend y la imagen Docker.
 
 Al hacer merge a `main`, GitHub Actions publica una imagen multi-arquitectura (`amd64` y `arm64`) en GHCR con un tag inmutable basado en el SHA del commit. Después abre un PR en `K3s-Cortex` para que Argo CD sincronice el nuevo estado deseado.
 

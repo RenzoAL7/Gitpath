@@ -43,6 +43,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Test simulator behavior
+        run: npm test
+
   container:
     name: Build container
     needs: validate

@@ -209,7 +209,7 @@ function App() {
                 <span className="step-number">{lesson.number}</span>
                 <span className="step-icon"><Icon name={lesson.level === 'Rescate' ? 'refresh' : lesson.level === 'Intermedio' ? 'shield' : 'commit'} size={19} /></span>
                 <span className="step-content"><span className="step-kicker">{lesson.category} · {lesson.duration}</span><strong>{lesson.title}</strong><span>{lesson.detail}</span></span>
-                <span className={'step-state ' + (completed ? 'state-ready' : active ? 'state-current' : '')}>{completed ? <Icon name="check" size={14} /> : active ? 'En curso' : 'Empezar'}</span>
+                <span className={'step-state ' + (completed ? 'state-ready' : active ? 'state-current' : '')}>{completed ? <><Icon name="check" size={14} />Completado</> : active ? 'En curso' : 'Empezar'}</span>
               </button>
             )
           })}
