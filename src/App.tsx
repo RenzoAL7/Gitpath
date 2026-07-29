@@ -1,11 +1,14 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { failureCases, lessons, type Lesson, type LessonLevel } from './data/lessons'
 import { createSession, runCommand, type SimulatorState } from './lib/git-simulator'
+
+const PROGRESS_KEY = 'gitpath:completed-lessons:v1'
 
 type IconName =
   | 'alert'
   | 'arrow'
   | 'book'
+  | 'branch'
   | 'check'
   | 'code'
   | 'commit'
@@ -16,249 +19,729 @@ type IconName =
   | 'target'
   | 'terminal'
 
-function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const common = {
     width: size,
     height: size,
     viewBox: '0 0 24 24',
     fill: 'none',
     stroke: 'currentColor',
-    strokeWidth: 1.8,
+    strokeWidth: 1.9,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
     'aria-hidden': true,
   }
 
-  if (name === 'alert') return <svg {...common}><path d="M10.3 4.2 3.4 17a2 2 0 0 0 1.8 3h13.6a2 2 0 0 0 1.8-3L13.7 4.2a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4m0 3h.01" /></svg>
-  if (name === 'arrow') return <svg {...common}><path d="M5 12h13" /><path d="m13 6 6 6-6 6" /></svg>
-  if (name === 'book') return <svg {...common}><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" /><path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20" /></svg>
-  if (name === 'check') return <svg {...common}><path d="m5 12 4 4L19 6" /></svg>
-  if (name === 'code') return <svg {...common}><path d="m8 9-3 3 3 3" /><path d="m16 9 3 3-3 3" /><path d="m14 5-4 14" /></svg>
-  if (name === 'commit') return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="M3 12h6m6 0h6" /></svg>
-  if (name === 'download') return <svg {...common}><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M5 20h14" /></svg>
-  if (name === 'refresh') return <svg {...common}><path d="M20 11a8 8 0 0 0-14.7-4L3 10" /><path d="M3 5v5h5" /><path d="M4 13a8 8 0 0 0 14.7 4L21 14" /><path d="M21 19v-5h-5" /></svg>
-  if (name === 'shield') return <svg {...common}><path d="M12 3 20 6v5c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-3Z" /><path d="m8.5 12 2.3 2.3 4.8-5" /></svg>
-  if (name === 'spark') return <svg {...common}><path d="m12 3 1.4 5.6L19 10l-5.6 1.4L12 17l-1.4-5.6L5 10l5.6-1.4L12 3Z" /><path d="m19 16 .6 2.4L22 19l-2.4.6L19 22l-.6-2.4L16 19l2.4-.6L19 16Z" /></svg>
-  if (name === 'target') return <svg {...common}><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /><path d="M12 2v3m0 14v3M2 12h3m14 0h3" /></svg>
-  return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3m5 0h5" /></svg>
+  const paths: Record<IconName, ReactNode> = {
+    alert: (
+      <>
+        <path d="M12 3 2.7 20.2a1.2 1.2 0 0 0 1.06 1.8h16.48a1.2 1.2 0 0 0 1.06-1.8L12 3Z" />
+        <path d="M12 9v4.5M12 17.25h.01" />
+      </>
+    ),
+    arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
+    book: (
+      <>
+        <path d="M4 5.75A2.75 2.75 0 0 1 6.75 3H11v16H6.75A2.75 2.75 0 0 0 4 21.75V5.75Z" />
+        <path d="M20 5.75A2.75 2.75 0 0 0 17.25 3H13v16h4.25A2.75 2.75 0 0 1 20 21.75V5.75Z" />
+      </>
+    ),
+    branch: (
+      <>
+        <circle cx="6" cy="5" r="2.25" />
+        <circle cx="18" cy="19" r="2.25" />
+        <circle cx="6" cy="19" r="2.25" />
+        <path d="M6 7.25v9.5M8.25 19H15.75a2.25 2.25 0 0 0 2.25-2.25V7" />
+      </>
+    ),
+    check: <path d="m5 12 4.3 4.3L19 6.7" />,
+    code: (
+      <>
+        <path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.5 5l-3 14" />
+      </>
+    ),
+    commit: (
+      <>
+        <path d="M5 12h3M16 12h3M8 12h8" />
+        <circle cx="12" cy="12" r="3.25" />
+      </>
+    ),
+    download: (
+      <>
+        <path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M5 21h14" />
+      </>
+    ),
+    refresh: (
+      <>
+        <path d="M20 11a8 8 0 0 0-14.7-4.4L3 9" />
+        <path d="M3 4v5h5M4 13a8 8 0 0 0 14.7 4.4L21 15" />
+        <path d="M21 20v-5h-5" />
+      </>
+    ),
+    shield: (
+      <>
+        <path d="M12 3 19 6v5.2c0 4.3-2.7 7.8-7 9.8-4.3-2-7-5.5-7-9.8V6l7-3Z" />
+        <path d="m8.75 12 2.1 2.1 4.35-4.35" />
+      </>
+    ),
+    spark: (
+      <>
+        <path d="m12 3 1.65 5.35L19 10l-5.35 1.65L12 17l-1.65-5.35L5 10l5.35-1.65L12 3Z" />
+        <path d="m19 16 .65 2.35L22 19l-2.35.65L19 22l-.65-2.35L16 19l2.35-.65L19 16Z" />
+      </>
+    ),
+    target: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" />
+      </>
+    ),
+    terminal: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2.2" />
+        <path d="m7 9 3 3-3 3M12.5 15H17" />
+      </>
+    ),
+  }
+
+  return <svg {...common}>{paths[name]}</svg>
 }
 
-function Pill({ children, tone = 'blue' }: { children: ReactNode; tone?: 'blue' | 'green' | 'orange' }) {
-  return <span className={'pill pill-' + tone}><span className="pill-dot" />{children}</span>
+function Pill({ children, tone = 'default' }: { children: ReactNode; tone?: 'default' | 'success' | 'warm' }) {
+  return <span className={'pill pill-' + tone}>{children}</span>
 }
 
-function levelTone(level: LessonLevel): 'blue' | 'green' | 'orange' {
-  if (level === 'Rescate') return 'orange'
-  if (level === 'Intermedio') return 'green'
-  return 'blue'
+function normalizePath(pathname: string) {
+  return pathname.replace(/\/+$/, '') || '/'
 }
 
-function readCompletedLessons() {
+function getCurrentPath() {
+  if (typeof window === 'undefined') return '/'
+  return normalizePath(window.location.pathname)
+}
+
+function lessonHref(lessonId: string) {
+  return '/ruta/' + lessonId
+}
+
+function labHref(lessonId?: string) {
+  return lessonId ? '/laboratorio?lesson=' + encodeURIComponent(lessonId) : '/laboratorio'
+}
+
+function validCompletedLessons(candidate: unknown): string[] {
+  if (!Array.isArray(candidate)) return []
+  const allowedIds = new Set(lessons.map((lesson) => lesson.id))
+  return [
+    ...new Set(
+      candidate.filter(
+        (lessonId): lessonId is string => typeof lessonId === 'string' && allowedIds.has(lessonId),
+      ),
+    ),
+  ]
+}
+
+function readCompletedLessons(): string[] {
   if (typeof window === 'undefined') return []
 
   try {
-    const stored = JSON.parse(window.localStorage.getItem('gitpath:completed-lessons:v1') ?? '[]')
-    return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : []
+    return validCompletedLessons(JSON.parse(window.localStorage.getItem(PROGRESS_KEY) ?? '[]'))
   } catch {
     return []
   }
 }
 
-function BranchMap({ session }: { session: SimulatorState }) {
+function levelTone(level: LessonLevel) {
+  if (level === 'Rescate') return 'warm'
+  if (level === 'Intermedio') return 'success'
+  return 'default'
+}
+
+function getNextLesson(completedLessons: string[], afterLessonId?: string) {
+  const remaining = lessons.filter((lesson) => !completedLessons.includes(lesson.id))
+  if (!afterLessonId) return remaining[0] ?? lessons[0]
+
+  const afterIndex = lessons.findIndex((lesson) => lesson.id === afterLessonId)
   return (
-    <div className="branch-map" aria-label={'Repositorio simulado en la rama ' + session.currentBranch}>
-      <div className="branch-map-topline">
-        <span><span className="live-dot" /> REPOSITORIO SIMULADO</span>
-        <code>HEAD → {session.head}</code>
+    lessons.slice(afterIndex + 1).find((lesson) => !completedLessons.includes(lesson.id)) ??
+    remaining[0] ??
+    lessons[0]
+  )
+}
+
+function getLessonFromPath(path: string) {
+  if (!path.startsWith('/ruta/')) return undefined
+  return lessons.find((lesson) => lesson.id === path.slice('/ruta/'.length))
+}
+
+function Navigation({ path }: { path: string }) {
+  const navItems = [
+    { href: '/fundamentos', label: 'Fundamentos' },
+    { href: '/ramas-y-prs', label: 'Ramas y PRs' },
+    { href: '/laboratorio', label: 'Laboratorio' },
+    { href: '/progreso', label: 'Progreso' },
+  ]
+
+  return (
+    <nav className="nav shell" aria-label="Navegación principal">
+      <a className="brand" href="/" aria-label="Ir al inicio de GitPath">
+        <span className="brand-mark" aria-hidden="true"><span /><span /><span /></span>
+        <span>GitPath<span className="brand-dot">.</span></span>
+      </a>
+
+      <div className="nav-links">
+        {navItems.map((item) => {
+          const isActive = path === item.href || path.startsWith(item.href + '/')
+          return <a className={isActive ? 'nav-link-active' : undefined} href={item.href} key={item.href}>{item.label}</a>
+        })}
       </div>
-      <div className="branch-lanes">
-        {session.branches.map((branch) => (
-          <div className={'branch-lane ' + (branch === session.currentBranch ? 'lane-active' : '')} key={branch}>
-            <span className="branch-name">{branch}</span>
-            <div className="lane-line">
-              {session.commits.map((commit, index) => (
-                <span className={'commit-node ' + (index === session.commits.length - 1 ? 'commit-node-current' : '')} key={commit}>
-                  <span>{commit}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
+
+      <a className="nav-cta" href="/laboratorio">Practicar <Icon name="arrow" size={17} /></a>
+    </nav>
+  )
+}
+
+function AppShell({
+  children,
+  path,
+  completedCount,
+}: {
+  children: ReactNode
+  path: string
+  completedCount: number
+}) {
+  return (
+    <main>
+      <Navigation path={path} />
+      {children}
+      <footer className="site-footer shell">
+        <div>
+          <a className="brand footer-brand" href="/">GitPath<span className="brand-dot">.</span></a>
+          <p>Aprende Git practicando decisiones reales, una ruta a la vez.</p>
+        </div>
+        <div className="footer-links">
+          <a href="/fundamentos">Fundamentos</a>
+          <a href="/ramas-y-prs">Ramas y PRs</a>
+          <a href="/laboratorio">Laboratorio</a>
+          <a href="/progreso">Progreso: {completedCount}/{lessons.length}</a>
+        </div>
+      </footer>
+    </main>
+  )
+}
+
+function SectionIntro({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow: string
+  title: ReactNode
+  description: ReactNode
+  action?: ReactNode
+}) {
+  return (
+    <section className="page-hero shell">
+      <div>
+        <Pill><span className="pill-dot" />{eyebrow}</Pill>
+        <h1>{title}</h1>
+        <p>{description}</p>
+        {action}
       </div>
-      <div className="repo-state">
-        <span><i className="state-icon state-clean" />{session.workingTree === 'clean' ? 'working tree limpio' : session.workingTree === 'conflict' ? 'conflicto pendiente' : 'cambios locales'}</span>
-        <span><i className={'state-icon ' + (session.staged ? 'state-staged' : 'state-muted')} />{session.staged ? 'staging preparado' : 'staging vacío'}</span>
+      <div className="page-orbit" aria-hidden="true">
+        <span className="orbit-core"><Icon name="target" size={28} /></span>
+        <span className="orbit-point orbit-one" />
+        <span className="orbit-point orbit-two" />
+        <span className="orbit-point orbit-three" />
+      </div>
+    </section>
+  )
+}
+
+function ProgressMeter({ completedLessons, compact = false }: { completedLessons: string[]; compact?: boolean }) {
+  const percentage = Math.round((completedLessons.length / lessons.length) * 100)
+  return (
+    <div className={compact ? 'progress-meter progress-meter-compact' : 'progress-meter'}>
+      <div className="progress-meter-head">
+        <span>{completedLessons.length} de {lessons.length} misiones completadas</span>
+        <strong>{percentage}%</strong>
+      </div>
+      <div className="progress-track" aria-label={percentage + '% de progreso'}>
+        <span style={{ width: percentage + '%' }} />
       </div>
     </div>
   )
 }
 
-function App() {
-  const [completedLessons, setCompletedLessons] = useState<string[]>(readCompletedLessons)
-  const [activeLessonId, setActiveLessonId] = useState(lessons[0].id)
-  const [session, setSession] = useState<SimulatorState>(() => createSession(lessons[0]))
+function LessonCard({
+  lesson,
+  completed,
+  featured = false,
+}: {
+  lesson: Lesson
+  completed: boolean
+  featured?: boolean
+}) {
+  return (
+    <article className={'course-card ' + (featured ? 'course-card-featured' : '')}>
+      <div className="course-card-top">
+        <Pill tone={completed ? 'success' : levelTone(lesson.level)}>
+          {completed ? <><Icon name="check" size={14} /> Completada</> : lesson.level}
+        </Pill>
+        <span>{lesson.duration}</span>
+      </div>
+      <p className="course-number">{lesson.number}</p>
+      <h3>{lesson.title}</h3>
+      <p>{lesson.scenario}</p>
+      <div className="course-card-footer">
+        <a href={lessonHref(lesson.id)}>Ver guía <Icon name="arrow" size={17} /></a>
+        <a className="text-action" href={labHref(lesson.id)}>Practicar</a>
+      </div>
+    </article>
+  )
+}
+
+function BranchMap({ activeStep = 1 }: { activeStep?: number }) {
+  return (
+    <div className="hero-branch-map" aria-label="Flujo visual de una rama de trabajo">
+      <div className="hero-branch-line" />
+      {['main', 'cambio', 'pull request'].map((name, index) => (
+        <div className={'hero-branch-node ' + (index === activeStep ? 'hero-branch-node-active' : '')} key={name}>
+          <span />
+          <small>{name}</small>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function HomePage({ completedLessons }: { completedLessons: string[] }) {
+  const nextLesson = getNextLesson(completedLessons)
+  return (
+    <>
+      <section className="hero shell">
+        <div className="hero-copy">
+          <Pill><span className="pill-dot" />RUTA PRÁCTICA · GIT DESDE CERO</Pill>
+          <h1>Aprende Git sin perderte en el camino<span className="accent">.</span></h1>
+          <p>Una ruta clara para convertir cambios pequeños en commits, ramas y pull requests que puedes explicar con confianza.</p>
+          <div className="hero-actions">
+            <a className="button button-primary" href="/fundamentos">Empezar la ruta <Icon name="arrow" size={18} /></a>
+            <a className="button button-quiet" href={labHref(nextLesson.id)}>Ir a mi siguiente misión <Icon name="arrow" size={18} /></a>
+          </div>
+          <div className="hero-meta">
+            <span><strong>{lessons.length}</strong> misiones guiadas</span>
+            <span className="meta-divider" />
+            <span><strong>100%</strong> práctica</span>
+          </div>
+        </div>
+
+        <div className="hero-card">
+          <div className="card-header"><span>tu siguiente paso</span><span>{nextLesson.duration}</span></div>
+          <h2>{nextLesson.title}</h2>
+          <p>{nextLesson.detail}</p>
+          <BranchMap activeStep={completedLessons.includes(nextLesson.id) ? 2 : 1} />
+          <div className="terminal-preview">
+            <div className="terminal-bar"><span /><span /><span /><code>gitpath / starter</code></div>
+            <pre><span>$</span> git status{'\n'}En tu rama de trabajo{'\n'}<span>$</span> git add .{'\n'}<span>$</span> git commit -m <i>"mi primer paso"</i><b /></pre>
+          </div>
+          <a href={labHref(nextLesson.id)}>Abrir misión <Icon name="arrow" size={17} /></a>
+        </div>
+      </section>
+
+      <section className="feature-strip shell" aria-label="Principios de GitPath">
+        <div><Icon name="target" size={22} /><span>Decisiones pequeñas<br /><strong>y reversibles</strong></span></div>
+        <div><Icon name="terminal" size={22} /><span>Comandos explicados<br /><strong>en un entorno seguro</strong></span></div>
+        <div><Icon name="shield" size={22} /><span>Errores frecuentes<br /><strong>convertidos en aprendizaje</strong></span></div>
+      </section>
+
+      <section className="learning-overview shell">
+        <div className="section-heading">
+          <div><Pill tone="success">LA RUTA</Pill><h2>Del cambio local al pull request.</h2></div>
+          <p>No memorizas comandos aislados: practicas el orden y el porqué de cada decisión.</p>
+        </div>
+        <div className="learning-map">
+          <a href="/fundamentos" className="map-step"><span>01</span><Icon name="commit" size={22} /><h3>Fundamentos</h3><p>Entiende estado, staging y commits pequeños.</p><small>Explorar <Icon name="arrow" size={15} /></small></a>
+          <a href="/ramas-y-prs" className="map-step"><span>02</span><Icon name="branch" size={22} /><h3>Ramas y PRs</h3><p>Trabaja sin romper main y revisa cambios con contexto.</p><small>Explorar <Icon name="arrow" size={15} /></small></a>
+          <a href="/laboratorio" className="map-step"><span>03</span><Icon name="terminal" size={22} /><h3>Laboratorio</h3><p>Escribe comandos y recibe guía mientras avanzas.</p><small>Practicar <Icon name="arrow" size={15} /></small></a>
+        </div>
+      </section>
+
+      <section className="route-section shell">
+        <div className="section-heading">
+          <div><Pill tone="success">MISIONES</Pill><h2>Tu ruta, visible desde el primer día.</h2></div>
+          <ProgressMeter completedLessons={completedLessons} compact />
+        </div>
+        <div className="course-grid">
+          {lessons.slice(0, 3).map((lesson, index) => (
+            <LessonCard completed={completedLessons.includes(lesson.id)} featured={index === 0} lesson={lesson} key={lesson.id} />
+          ))}
+        </div>
+        <a className="section-link" href="/progreso">Ver mi progreso completo <Icon name="arrow" size={18} /></a>
+      </section>
+
+      <section className="failure-section shell">
+        <div className="section-heading">
+          <div><Pill tone="warm"><Icon name="shield" size={14} /> APRENDE SEGURO</Pill><h2>Equivocarte también es parte de la ruta.</h2></div>
+          <p>Antes de que un error llegue a tu repositorio, entiendes su señal y una salida segura.</p>
+        </div>
+        <div className="failure-grid">
+          {failureCases.map((failure) => (
+            <article className={'failure-card failure-' + failure.tone} key={failure.title}>
+              <Icon name="alert" size={20} /><h3>{failure.title}</h3><p>{failure.symptom}</p><code>{failure.rescue}</code>
+            </article>
+          ))}
+        </div>
+      </section>
+    </>
+  )
+}
+
+function FoundationsPage({ completedLessons }: { completedLessons: string[] }) {
+  const firstCommit = lessons.find((lesson) => lesson.id === 'first-commit') ?? lessons[0]
+  const safeBranch = lessons.find((lesson) => lesson.id === 'safe-branch') ?? lessons[1]
+  return (
+    <>
+      <SectionIntro
+        eyebrow="RUTA 01 · FUNDAMENTOS"
+        title={<>Haz visible el cambio antes de compartirlo<span className="accent">.</span></>}
+        description="Git no empieza con un comando: empieza entendiendo qué cambió, qué quieres guardar y qué mensaje permitirá recordar por qué lo hiciste."
+        action={<a className="button button-primary page-hero-action" href={labHref(firstCommit.id)}>Practicar primer commit <Icon name="arrow" size={18} /></a>}
+      />
+
+      <section className="concept-section shell">
+        <div className="section-heading">
+          <div><Pill tone="success">MODELO MENTAL</Pill><h2>Un cambio recorre tres estados.</h2></div>
+          <p>La clave es no intentar hacer todo a la vez. Cada estado responde una pregunta distinta.</p>
+        </div>
+        <div className="state-flow">
+          <article><span>01</span><Icon name="code" size={24} /><h3>Directorio de trabajo</h3><p>¿Qué cambiaste realmente?</p><code>git status</code></article>
+          <div className="state-arrow"><Icon name="arrow" size={20} /></div>
+          <article><span>02</span><Icon name="download" size={24} /><h3>Staging</h3><p>¿Qué parte quieres incluir?</p><code>git add .</code></article>
+          <div className="state-arrow"><Icon name="arrow" size={20} /></div>
+          <article><span>03</span><Icon name="commit" size={24} /><h3>Commit</h3><p>¿Qué decisión queda registrada?</p><code>git commit -m "mensaje"</code></article>
+        </div>
+      </section>
+
+      <section className="route-section shell">
+        <div className="section-heading">
+          <div><Pill>PRÁCTICA GUIADA</Pill><h2>Dos misiones para empezar con contexto.</h2></div>
+          <p>Completa una antes de pasar a la siguiente. El progreso se guarda en este navegador.</p>
+        </div>
+        <div className="course-grid two-columns">
+          <LessonCard lesson={firstCommit} completed={completedLessons.includes(firstCommit.id)} featured />
+          <LessonCard lesson={safeBranch} completed={completedLessons.includes(safeBranch.id)} />
+        </div>
+      </section>
+
+      <section className="checklist-section shell">
+        <div><Pill tone="warm">ANTES DE COMMIT</Pill><h2>La mini lista que evita commits confusos.</h2></div>
+        <ol>
+          <li><span>1</span><p><strong>Lee el estado.</strong> No añadas archivos que no reconoces.</p></li>
+          <li><span>2</span><p><strong>Haz un cambio con una sola intención.</strong> Un commit no debería mezclar una corrección y una función nueva.</p></li>
+          <li><span>3</span><p><strong>Describe la decisión.</strong> El mensaje explica el porqué, no repite el nombre del archivo.</p></li>
+        </ol>
+      </section>
+    </>
+  )
+}
+
+function BranchesAndPullRequestsPage({ completedLessons }: { completedLessons: string[] }) {
+  const branchLesson = lessons.find((lesson) => lesson.id === 'safe-branch') ?? lessons[1]
+  const conflictLesson = lessons.find((lesson) => lesson.id === 'resolve-conflict') ?? lessons[3]
+  const [checked, setChecked] = useState<Record<string, boolean>>({})
+  const checklist = [
+    'Entiendo qué cambia esta rama.',
+    'Probé la experiencia antes de abrir el PR.',
+    'El título del PR explica el resultado esperado.',
+    'No incluí secretos, builds locales ni archivos ajenos.',
+  ]
+
+  return (
+    <>
+      <SectionIntro
+        eyebrow="RUTA 02 · COLABORACIÓN"
+        title={<>Tu rama protege el trabajo; el PR protege la decisión<span className="accent">.</span></>}
+        description="Main se mantiene estable. Cada cambio vive primero en una rama con un propósito claro, luego se revisa como pull request antes de fusionarse."
+        action={<a className="button button-primary page-hero-action" href={labHref(branchLesson.id)}>Crear una rama segura <Icon name="arrow" size={18} /></a>}
+      />
+
+      <section className="workflow-section shell">
+        <div className="section-heading">
+          <div><Pill tone="success">FLUJO DE EQUIPO</Pill><h2>Una secuencia que puedes repetir.</h2></div>
+          <p>El objetivo no es usar más comandos; es llegar a main con un cambio entendible, probado y reversible.</p>
+        </div>
+        <ol className="workflow-flow">
+          <li><span>01</span><div><Icon name="branch" size={20} /><h3>Crea una rama</h3><p><code>git switch -c feat/mi-cambio</code></p></div></li>
+          <li><span>02</span><div><Icon name="commit" size={20} /><h3>Commits pequeños</h3><p>Un mensaje por intención.</p></div></li>
+          <li><span>03</span><div><Icon name="book" size={20} /><h3>Abre un PR</h3><p>Cuenta qué cambia y cómo probarlo.</p></div></li>
+          <li><span>04</span><div><Icon name="check" size={20} /><h3>Revisa y fusiona</h3><p>Protege main con validaciones.</p></div></li>
+        </ol>
+      </section>
+
+      <section className="route-section shell">
+        <div className="section-heading">
+          <div><Pill>ENTRENAMIENTO</Pill><h2>Trabaja seguro antes de colaborar.</h2></div>
+          <ProgressMeter completedLessons={completedLessons} compact />
+        </div>
+        <div className="course-grid two-columns">
+          <LessonCard lesson={branchLesson} completed={completedLessons.includes(branchLesson.id)} featured />
+          <LessonCard lesson={conflictLesson} completed={completedLessons.includes(conflictLesson.id)} />
+        </div>
+      </section>
+
+      <section className="pr-checklist shell">
+        <div><Pill tone="warm">CHECKLIST INTERACTIVA</Pill><h2>Antes de abrir un pull request.</h2><p>Marca esta lista como si fueras a pedir revisión hoy.</p></div>
+        <div className="checklist-items">
+          {checklist.map((item) => (
+            <label className={checked[item] ? 'checked' : ''} key={item}>
+              <input checked={Boolean(checked[item])} onChange={() => setChecked((current) => ({ ...current, [item]: !current[item] }))} type="checkbox" />
+              <span><Icon name="check" size={16} /></span>
+              {item}
+            </label>
+          ))}
+        </div>
+      </section>
+    </>
+  )
+}
+
+function LessonDetailPage({ lesson, completedLessons }: { lesson: Lesson; completedLessons: string[] }) {
+  const completed = completedLessons.includes(lesson.id)
+  const nextLesson = getNextLesson(completedLessons, lesson.id)
+  return (
+    <>
+      <SectionIntro
+        eyebrow={lesson.number + ' · ' + lesson.category.toUpperCase()}
+        title={<>{lesson.title}<span className="accent">.</span></>}
+        description={lesson.detail}
+        action={<a className="button button-primary page-hero-action" href={labHref(lesson.id)}>Abrir laboratorio <Icon name="terminal" size={18} /></a>}
+      />
+
+      <section className="lesson-detail shell">
+        <article className="lesson-objective">
+          <Pill tone={completed ? 'success' : levelTone(lesson.level)}>{completed ? <><Icon name="check" size={14} /> Misión completada</> : lesson.level}</Pill>
+          <h2>Objetivo</h2><p>{lesson.objective}</p>
+          <dl><div><dt>Duración</dt><dd>{lesson.duration}</dd></div><div><dt>Escenario</dt><dd>{lesson.scenario}</dd></div></dl>
+        </article>
+        <article className="lesson-concepts">
+          <Pill>CONCEPTOS</Pill><h2>Antes de escribir comandos.</h2>
+          <ul>{lesson.concepts.map((concept) => <li key={concept}><Icon name="spark" size={16} />{concept}</li>)}</ul>
+        </article>
+      </section>
+
+      <section className="command-guide shell">
+        <div className="section-heading">
+          <div><Pill tone="success">GUÍA PASO A PASO</Pill><h2>Haz una cosa por vez.</h2></div>
+          <p>En el laboratorio cada comando se valida y te indica qué cambió en el repositorio simulado.</p>
+        </div>
+        <div className="command-guide-list">
+          {lesson.steps.map((step, index) => (
+            <article key={step.command}><span>{String(index + 1).padStart(2, '0')}</span><div><code>$ {step.command}</code><p>{step.hint}</p></div></article>
+          ))}
+        </div>
+        <div className="detail-actions">
+          <a className="button button-primary" href={labHref(lesson.id)}>Practicar esta misión <Icon name="arrow" size={18} /></a>
+          {nextLesson.id !== lesson.id && <a className="button button-quiet" href={lessonHref(nextLesson.id)}>Siguiente guía <Icon name="arrow" size={18} /></a>}
+        </div>
+      </section>
+    </>
+  )
+}
+
+function LabPage({
+  completedLessons,
+  onComplete,
+}: {
+  completedLessons: string[]
+  onComplete: (lessonId: string) => void
+}) {
+  const lessonFromQuery = (() => {
+    if (typeof window === 'undefined') return undefined
+    const lessonId = new URLSearchParams(window.location.search).get('lesson')
+    return lessons.find((lesson) => lesson.id === lessonId)
+  })()
+  const initialLesson = lessonFromQuery ?? getNextLesson(completedLessons)
+  const [activeLesson, setActiveLesson] = useState<Lesson>(initialLesson)
+  const [session, setSession] = useState<SimulatorState>(() => createSession(initialLesson))
   const [command, setCommand] = useState('')
 
-  const activeLesson = lessons.find((lesson) => lesson.id === activeLessonId) ?? lessons[0]
-  const completedCount = completedLessons.length
-  const progressPercentage = Math.round((completedCount / lessons.length) * 100)
-
-  useEffect(() => {
-    window.localStorage.setItem('gitpath:completed-lessons:v1', JSON.stringify(completedLessons))
-  }, [completedLessons])
-
   const selectLesson = (lesson: Lesson) => {
-    setActiveLessonId(lesson.id)
+    setActiveLesson(lesson)
     setSession(createSession(lesson))
     setCommand('')
-    window.requestAnimationFrame(() => {
-      document.getElementById('laboratorio')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
+    window.history.replaceState({}, '', labHref(lesson.id))
   }
 
-  const execute = (event: FormEvent<HTMLFormElement>) => {
+  const executeCommand = (event: FormEvent) => {
     event.preventDefault()
+    if (!command.trim()) return
     const result = runCommand(session, activeLesson, command)
     setSession(result.state)
     setCommand('')
-
-    if (result.accepted && result.state.completed) {
-      setCompletedLessons((current) => current.includes(activeLesson.id) ? current : [...current, activeLesson.id])
-    }
+    if (result.state.completed) onComplete(activeLesson.id)
   }
 
-  const resetSession = () => {
-    setSession(createSession(activeLesson))
-    setCommand('')
-  }
+  const completedWithActive = session.completed ? [...new Set([...completedLessons, activeLesson.id])] : completedLessons
+  const nextLesson = getNextLesson(completedWithActive, activeLesson.id)
 
   return (
-    <main>
-      <nav className="nav shell" aria-label="Navegación principal">
-        <a className="brand" href="#inicio" aria-label="GitPath inicio">
-          <span className="brand-mark"><span /><span /><span /></span>
-          <span>GitPath<span className="brand-dot">.</span></span>
-        </a>
-        <div className="nav-links">
-          <a href="#ruta">La ruta</a>
-          <a href="#laboratorio">Laboratorio</a>
-          <a href="#casos">Casos reales</a>
-        </div>
-        <a className="nav-cta" href="#ruta">Empezar <Icon name="arrow" size={16} /></a>
-      </nav>
+    <>
+      <SectionIntro
+        eyebrow="LABORATORIO GUIADO"
+        title={<>Practica sin miedo a romper tu repositorio<span className="accent">.</span></>}
+        description="Este entorno simula un repositorio y evalúa el propósito de cada comando. Puedes repetir una misión cuantas veces necesites."
+      />
 
-      <section className="hero shell" id="inicio">
-        <div className="hero-copy">
-          <Pill>RUTA 01 · FUNDAMENTOS</Pill>
-          <h1>Aprende Git sin perderte en el camino<span className="accent">.</span></h1>
-          <p className="hero-lede">Una ruta práctica para pasar de “no sé por dónde empezar” a resolver conflictos, rescatar cambios y colaborar con confianza.</p>
-          <div className="hero-actions">
-            <a className="button button-primary" href="#ruta">Comenzar la ruta <Icon name="arrow" size={17} /></a>
-            <a className="text-link" href="#laboratorio">Probar el laboratorio <Icon name="arrow" size={16} /></a>
+      <section className="lab-section shell">
+        <aside className="scenario-card">
+          <div className="scenario-heading"><Pill tone="success">MISIONES</Pill><span>{completedLessons.length}/{lessons.length}</span></div>
+          <h2>Elige una práctica</h2><p>Empieza donde estás. Cada misión explica el contexto antes de pedir un comando.</p>
+          <div className="lesson-selector">
+            {lessons.map((lesson) => {
+              const isActive = lesson.id === activeLesson.id
+              const isComplete = completedLessons.includes(lesson.id)
+              return (
+                <button className={'lesson-option ' + (isActive ? 'lesson-option-active' : '')} key={lesson.id} onClick={() => selectLesson(lesson)} type="button">
+                  <span>{isComplete ? <Icon name="check" size={15} /> : lesson.number}</span>
+                  <div><strong>{lesson.shortTitle}</strong><small>{lesson.level} · {lesson.duration}</small></div>
+                </button>
+              )
+            })}
           </div>
-          <div className="hero-meta">
-            <span><strong>{lessons.length}</strong> escenarios reales</span>
-            <span className="meta-separator" />
-            <span><strong>100%</strong> práctico</span>
-            <span className="meta-separator" />
-            <span><strong>{progressPercentage}%</strong> tu progreso</span>
-          </div>
-          <div className="delivery-note"><span className="delivery-icon"><Icon name="shield" size={14} /></span> Deploy automático verificado con CI/CD + GitOps</div>
-        </div>
+          <a className="scenario-guide-link" href={lessonHref(activeLesson.id)}>Leer la guía de esta misión <Icon name="arrow" size={16} /></a>
+        </aside>
 
-        <div className="hero-card" aria-label="Vista previa de la ruta GitPath">
-          <div className="card-topline"><span className="card-kicker">TU PRÓXIMO PASO</span><span className="card-time">{lessons[0].duration}</span></div>
-          <h2>{lessons[0].title}</h2>
-          <p>{lessons[0].objective}</p>
-          <div className="branch-visual">
-            <div className="branch-line" />
-            <span className="node node-start" />
-            <span className="node node-current" />
-            <span className="node node-end" />
-            <span className="branch-label label-main">main</span>
-            <span className="branch-label label-feature">tu-cambio</span>
+        <div className="terminal-lab">
+          <div className="lab-topbar">
+            <div><Pill>{activeLesson.number} · {activeLesson.level}</Pill><h2>{activeLesson.title}</h2></div>
+            <span className={session.completed ? 'lab-status lab-status-success' : 'lab-status'}>{session.completed ? 'Completada' : 'Paso ' + Math.min(session.currentStep + 1, activeLesson.steps.length) + '/' + activeLesson.steps.length}</span>
           </div>
-          <div className="terminal-preview">
-            <div className="terminal-bar"><span /><span /><span /><em>gitpath / starter</em></div>
-            <div className="terminal-body"><span className="prompt">$</span> git status<br /><span className="terminal-muted">Cambios no preparados</span><br /><span className="prompt">$</span> git add .<br /><span className="prompt">$</span> git commit -m <span className="terminal-green">"tu primer paso"</span><span className="cursor" /></div>
+          <div className="scenario-copy"><h3>{activeLesson.scenario}</h3><p>{activeLesson.objective}</p></div>
+          <div className="command-steps">
+            {activeLesson.steps.map((step, index) => (
+              <div className={'command-step ' + (index < session.currentStep ? 'command-step-done ' : '') + (index === session.currentStep && !session.completed ? 'command-step-current' : '')} key={step.command}>
+                <span>{index < session.currentStep || session.completed ? <Icon name="check" size={15} /> : index + 1}</span>
+                <div><code>{step.command}</code><p>{step.hint}</p></div>
+              </div>
+            ))}
           </div>
-          <a className="card-link" href="#laboratorio">Abrir escenario <Icon name="arrow" size={16} /></a>
+          <div className="terminal-window" aria-live="polite">
+            <div className="terminal-bar"><span /><span /><span /><code>gitpath / {activeLesson.id}</code></div>
+            <div className="terminal-output">
+              {session.transcript.map((entry, index) => (
+                <div className="terminal-entry" key={entry.type + '-' + index}>
+                  {entry.type === 'command' ? (
+                    <code><span>$</span> {entry.text}</code>
+                  ) : (
+                    <p className={entry.type === 'error' ? 'terminal-error' : entry.type === 'hint' ? 'terminal-muted' : 'terminal-success'}>{entry.text}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <form className="terminal-input" onSubmit={executeCommand}>
+              <span>$</span>
+              <input aria-label="Comando de Git" autoCapitalize="none" autoComplete="off" disabled={session.completed} onChange={(event) => setCommand(event.target.value)} placeholder={session.completed ? 'Misión completada' : activeLesson.steps[session.currentStep]?.command} spellCheck={false} value={command} />
+              <button aria-label="Ejecutar comando" disabled={session.completed} type="submit"><Icon name="arrow" size={18} /></button>
+            </form>
+          </div>
+          {session.completed && (
+            <div className="completion-card">
+              <div><Icon name="check" size={21} /></div>
+              <div><strong>Misión completada.</strong><p>{activeLesson.success}</p></div>
+              {nextLesson.id !== activeLesson.id && <a href={labHref(nextLesson.id)}>Siguiente <Icon name="arrow" size={17} /></a>}
+            </div>
+          )}
         </div>
       </section>
+    </>
+  )
+}
 
-      <section className="feature-strip shell" id="como-funciona">
-        <div className="strip-intro"><span className="eyebrow">APRENDE HACIENDO</span><h2>Situación, comando, criterio.</h2><p>GitPath convierte cada concepto en una decisión que podrías tomar durante un día real de desarrollo.</p></div>
-        <div className="feature-grid">
-          <article className="feature-item"><span className="feature-icon icon-yellow"><Icon name="target" /></span><h3>Entiende el contexto</h3><p>Parte de un incidente, no de una lista aislada de comandos.</p></article>
-          <article className="feature-item"><span className="feature-icon icon-purple"><Icon name="terminal" /></span><h3>Practica sin miedo</h3><p>Prueba comandos en un repositorio simulado y reversible.</p></article>
-          <article className="feature-item"><span className="feature-icon icon-green"><Icon name="shield" /></span><h3>Aprende a recuperarte</h3><p>Conoce riesgos, señales de alerta y caminos de rescate.</p></article>
-        </div>
+function ProgressPage({ completedLessons, onReset }: { completedLessons: string[]; onReset: () => void }) {
+  const percentage = Math.round((completedLessons.length / lessons.length) * 100)
+  return (
+    <>
+      <SectionIntro
+        eyebrow="TU PROGRESO"
+        title={<>Una ruta que se adapta a tu ritmo<span className="accent">.</span></>}
+        description="Tu avance se guarda de forma local en este navegador. Vuelve al laboratorio para retomar la siguiente misión pendiente."
+        action={<a className="button button-primary page-hero-action" href={labHref(getNextLesson(completedLessons).id)}>Continuar mi ruta <Icon name="arrow" size={18} /></a>}
+      />
+      <section className="progress-summary shell">
+        <div className="progress-stat"><strong>{completedLessons.length}</strong><span>misiones completadas</span></div>
+        <ProgressMeter completedLessons={completedLessons} />
+        <div className="progress-stat"><strong>{percentage}%</strong><span>de la ruta práctica</span></div>
       </section>
-
-      <section className="route-section shell" id="ruta">
+      <section className="progress-list shell">
         <div className="section-heading">
-          <div><span className="eyebrow">TU PRIMERA RUTA</span><h2>De cero a tu primer PR.</h2></div>
-          <div className="progress-summary"><span>{completedCount} de {lessons.length} completados</span><div className="progress-track"><span style={{ width: progressPercentage + '%' }} /></div></div>
+          <div><Pill tone="success">MISIONES</Pill><h2>Tu tablero de aprendizaje.</h2></div>
+          {completedLessons.length > 0 && <button className="reset-progress" onClick={onReset} type="button"><Icon name="refresh" size={16} /> Reiniciar progreso</button>}
         </div>
-        <div className="steps-list">
+        <div className="progress-rows">
           {lessons.map((lesson) => {
-            const completed = completedLessons.includes(lesson.id)
-            const active = lesson.id === activeLessonId
+            const done = completedLessons.includes(lesson.id)
             return (
-              <button className={'step-card ' + (active ? 'step-active' : '')} key={lesson.id} type="button" onClick={() => selectLesson(lesson)}>
-                <span className="step-number">{lesson.number}</span>
-                <span className="step-icon"><Icon name={lesson.level === 'Rescate' ? 'refresh' : lesson.level === 'Intermedio' ? 'shield' : 'commit'} size={19} /></span>
-                <span className="step-content"><span className="step-kicker">{lesson.category} · {lesson.duration}</span><strong>{lesson.title}</strong><span>{lesson.detail}</span></span>
-                <span className={'step-state ' + (completed ? 'state-ready' : active ? 'state-current' : '')}>{completed ? <><Icon name="check" size={14} />Completado</> : active ? 'En curso' : 'Empezar'}</span>
-              </button>
+              <article className={done ? 'progress-row progress-row-done' : 'progress-row'} key={lesson.id}>
+                <span className="progress-row-icon">{done ? <Icon name="check" size={18} /> : lesson.number}</span>
+                <div><Pill tone={done ? 'success' : levelTone(lesson.level)}>{done ? 'Completada' : lesson.level}</Pill><h3>{lesson.title}</h3><p>{lesson.category} · {lesson.duration}</p></div>
+                <a href={done ? lessonHref(lesson.id) : labHref(lesson.id)}>{done ? 'Repasar' : 'Empezar'} <Icon name="arrow" size={17} /></a>
+              </article>
             )
           })}
         </div>
       </section>
-
-      <section className="lab-section shell" id="laboratorio">
-        <div className="section-heading lab-heading">
-          <div><span className="eyebrow">LABORATORIO INTERACTIVO</span><h2>Resuelve una situación de código.</h2><p>Elige una misión, ejecuta los comandos y observa cómo cambia el repositorio.</p></div>
-          <Pill tone={levelTone(activeLesson.level)}>{activeLesson.level.toUpperCase()} · {activeLesson.duration}</Pill>
-        </div>
-        <div className="lab-layout">
-          <aside className="scenario-card">
-            <div className="scenario-label"><Icon name="alert" size={15} /> INCIDENTE SIMULADO</div>
-            <h3>{activeLesson.title}</h3>
-            <p className="scenario-copy">{activeLesson.scenario}</p>
-            <div className="objective-box"><span>OBJETIVO</span><p>{activeLesson.objective}</p></div>
-            <div className="concepts"><span className="eyebrow">VAS A PRACTICAR</span><div>{activeLesson.concepts.map((concept) => <span className="concept-chip" key={concept}>{concept}</span>)}</div></div>
-            <div className="command-guide"><span className="eyebrow">COMANDOS DE LA MISIÓN</span><div className="command-list">{activeLesson.steps.map((step, index) => <button type="button" className={'command-chip ' + (index === session.currentStep ? 'command-chip-active' : '')} key={step.command} onClick={() => setCommand(step.command)}><span>0{index + 1}</span><code>{step.command}</code></button>)}</div></div>
-          </aside>
-
-          <div className="terminal-lab">
-            <div className="lab-toolbar"><div><span className="terminal-status-dot" /> gitpath / {activeLesson.id}</div><button type="button" className="reset-button" onClick={resetSession}><Icon name="refresh" size={14} /> Reiniciar</button></div>
-            <BranchMap session={session} />
-            <div className="terminal-window">
-              <div className="terminal-window-bar"><span /><span /><span /><em>shell · práctica guiada</em><span className="step-counter">paso {Math.min(session.currentStep + 1, activeLesson.steps.length)} / {activeLesson.steps.length}</span></div>
-              <div className="terminal-history" aria-live="polite">
-                {session.transcript.map((line, index) => <div className={'terminal-line terminal-line-' + line.type} key={index}><span className="line-prefix">{line.type === 'command' ? '$' : line.type === 'error' ? '!' : line.type === 'hint' ? '↳' : '>'}</span><span>{line.text}</span></div>)}
-              </div>
-              <form className="command-form" onSubmit={execute}>
-                <label className="sr-only" htmlFor="git-command">Comando Git</label>
-                <span className="input-prefix">$</span>
-                <input id="git-command" value={command} onChange={(event) => setCommand(event.target.value)} placeholder={session.completed ? 'Misión completada' : activeLesson.steps[session.currentStep].command} disabled={session.completed} autoComplete="off" />
-                <button type="submit" className="execute-button" disabled={session.completed}>Ejecutar <Icon name="arrow" size={15} /></button>
-              </form>
-            </div>
-            <div className={'lab-feedback feedback-' + session.feedback.tone} aria-live="polite"><span className="feedback-icon"><Icon name={session.feedback.tone === 'error' ? 'alert' : session.feedback.tone === 'success' ? 'check' : 'spark'} size={15} /></span><span>{session.feedback.text}</span></div>
-          </div>
-        </div>
-      </section>
-
-      <section className="failure-section shell" id="casos">
-        <div className="failure-heading"><span className="eyebrow">CUANDO ALGO SALE MAL</span><h2>Los errores también enseñan.</h2><p>Una buena herramienta educativa no oculta el riesgo: muestra el síntoma, el daño posible y cómo volver a un estado seguro.</p></div>
-        <div className="failure-grid">{failureCases.map((failure) => <article className={'failure-card failure-' + failure.tone} key={failure.title}><span className="failure-icon"><Icon name="alert" size={17} /></span><h3>{failure.title}</h3><p>{failure.symptom}</p><div><span>RIESGO</span><strong>{failure.risk}</strong></div><code>{failure.rescue}</code></article>)}</div>
-      </section>
-
-      <footer className="footer shell"><a className="brand" href="#inicio"><span className="brand-mark"><span /><span /><span /></span><span>GitPath<span className="brand-dot">.</span></span></a><span>Aprende. Practica. Avanza.</span><span className="footer-status"><span className="status-dot" />CI/CD + GitOps verificado</span></footer>
-    </main>
+    </>
   )
+}
+
+function NotFoundPage() {
+  return (
+    <section className="not-found shell">
+      <Pill tone="warm">404</Pill>
+      <h1>Esta ruta todavía no existe<span className="accent">.</span></h1>
+      <p>Volvamos a una misión conocida y sigamos aprendiendo desde allí.</p>
+      <a className="button button-primary" href="/">Ir al inicio <Icon name="arrow" size={18} /></a>
+    </section>
+  )
+}
+
+function App() {
+  const path = getCurrentPath()
+  const [completedLessons, setCompletedLessons] = useState<string[]>(readCompletedLessons)
+
+  useEffect(() => {
+    window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(completedLessons))
+  }, [completedLessons])
+
+  useEffect(() => {
+    const syncProgress = (event: StorageEvent) => {
+      if (event.key === PROGRESS_KEY) setCompletedLessons(readCompletedLessons())
+    }
+    window.addEventListener('storage', syncProgress)
+    return () => window.removeEventListener('storage', syncProgress)
+  }, [])
+
+  const completeLesson = (lessonId: string) => {
+    setCompletedLessons((current) => validCompletedLessons([...current, lessonId]))
+  }
+
+  const resetProgress = () => {
+    if (window.confirm('¿Quieres reiniciar el progreso guardado en este navegador?')) setCompletedLessons([])
+  }
+
+  const lesson = getLessonFromPath(path)
+  let page: ReactNode
+
+  if (path === '/') page = <HomePage completedLessons={completedLessons} />
+  else if (path === '/fundamentos') page = <FoundationsPage completedLessons={completedLessons} />
+  else if (path === '/ramas-y-prs') page = <BranchesAndPullRequestsPage completedLessons={completedLessons} />
+  else if (path === '/laboratorio') page = <LabPage completedLessons={completedLessons} onComplete={completeLesson} />
+  else if (path === '/progreso') page = <ProgressPage completedLessons={completedLessons} onReset={resetProgress} />
+  else if (lesson) page = <LessonDetailPage completedLessons={completedLessons} lesson={lesson} />
+  else page = <NotFoundPage />
+
+  return <AppShell completedCount={completedLessons.length} path={path}>{page}</AppShell>
 }
 
 export default App
