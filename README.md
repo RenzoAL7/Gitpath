@@ -32,6 +32,15 @@ CI/CD
 
 El simulador es deliberadamente determinista y local en esta primera etapa. Eso permite practicar sin credenciales, sin riesgo para repositorios reales y sin depender de una API durante la lección.
 
+## Cómo se usa la ruta
+
+1. Elige una guía en **Fundamentos** o **Ramas y PRs** para entender el contexto antes de abrir la terminal.
+2. En el **Laboratorio**, lee el escenario y prueba el comando que creas correcto. El panel muestra qué paso sigue y por qué.
+3. Si te bloqueas, puedes usar el comando sugerido como punto de partida y modificarlo antes de ejecutarlo. No sustituye la explicación ni completa la misión por ti.
+4. Al completar una misión, el avance se guarda únicamente en `localStorage` del navegador. Puedes retomar la siguiente práctica desde Inicio o Progreso.
+
+La navegación mantiene las rutas visibles también en móvil, de modo que se puede cambiar de contexto sin perder la práctica actual.
+
 ## Desarrollo local
 
 ```bash
