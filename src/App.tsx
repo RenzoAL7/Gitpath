@@ -591,6 +591,7 @@ function LabPage({
 
   const completedWithActive = session.completed ? [...new Set([...completedLessons, activeLesson.id])] : completedLessons
   const nextLesson = getNextLesson(completedWithActive, activeLesson.id)
+  const suggestedCommand = session.completed ? undefined : activeLesson.steps[session.currentStep]?.command
 
   return (
     <>
@@ -633,6 +634,12 @@ function LabPage({
               </div>
             ))}
           </div>
+          {!session.completed && suggestedCommand && (
+            <div className="command-starter">
+              <div><strong>¿Quieres una base?</strong><span>Coloca el comando del paso actual y edítalo si lo necesitas.</span></div>
+              <button onClick={() => setCommand(suggestedCommand)} type="button">Usar comando sugerido <Icon name="arrow" size={15} /></button>
+            </div>
+          )}
           <div className="terminal-window" aria-live="polite">
             <div className="terminal-bar"><span /><span /><span /><code>gitpath / {activeLesson.id}</code></div>
             <div className="terminal-output">
