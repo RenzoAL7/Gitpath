@@ -192,7 +192,7 @@ function Navigation({ path }: { path: string }) {
       <div className="nav-links">
         {navItems.map((item) => {
           const isActive = path === item.href || path.startsWith(item.href + '/')
-          return <a className={isActive ? 'nav-link-active' : undefined} href={item.href} key={item.href}>{item.label}</a>
+          return <a aria-current={isActive ? 'page' : undefined} className={isActive ? 'nav-link-active' : undefined} href={item.href} key={item.href}>{item.label}</a>
         })}
       </div>
 
@@ -224,6 +224,7 @@ function AppShell({
           <a href="/ramas-y-prs">Ramas y PRs</a>
           <a href="/laboratorio">Laboratorio</a>
           <a href="/progreso">Progreso: {completedCount}/{lessons.length}</a>
+          <a href="https://github.com/RenzoAL7/Gitpath" rel="noreferrer" target="_blank">Código en GitHub ↗</a>
         </div>
       </footer>
     </main>
@@ -249,11 +250,15 @@ function SectionIntro({
         <p>{description}</p>
         {action}
       </div>
-      <div className="page-orbit" aria-hidden="true">
-        <span className="orbit-core"><Icon name="target" size={28} /></span>
-        <span className="orbit-point orbit-one" />
-        <span className="orbit-point orbit-two" />
-        <span className="orbit-point orbit-three" />
+      <div className="page-note" aria-label="Cómo funciona GitPath">
+        <div className="page-note-topline"><span>NOTA DE CAMPO</span><span>LOCAL · SEGURO</span></div>
+        <p className="page-note-quote">“Mira el estado antes de tocar la historia.”</p>
+        <div className="page-note-flow" aria-hidden="true">
+          <span><code>working tree</code><b>→</b></span>
+          <span><code>staging</code><b>→</b></span>
+          <span><code>commit</code></span>
+        </div>
+        <div className="page-note-footer"><span className="status-dot" /> progreso guardado en este navegador</div>
       </div>
     </section>
   )
@@ -323,36 +328,38 @@ function HomePage({ completedLessons }: { completedLessons: string[] }) {
       <section className="hero shell">
         <div className="hero-copy">
           <Pill><span className="pill-dot" />RUTA PRÁCTICA · GIT DESDE CERO</Pill>
-          <h1>Aprende Git sin perderte en el camino<span className="accent">.</span></h1>
-          <p>Una ruta clara para convertir cambios pequeños en commits, ramas y pull requests que puedes explicar con confianza.</p>
+          <h1>Cuando Git se complica, vuelve al estado del repo<span className="accent">.</span></h1>
+          <p>GitPath es un laboratorio para practicar las decisiones que aparecen cuando el repositorio ya tiene historia: mirar, separar, guardar y revisar.</p>
           <div className="hero-actions">
-            <a className="button button-primary" href="/fundamentos">Empezar la ruta <Icon name="arrow" size={18} /></a>
-            <a className="button button-quiet" href={labHref(nextLesson.id)}>Ir a mi siguiente misión <Icon name="arrow" size={18} /></a>
+            <a className="button button-primary" href="/fundamentos">Ver la ruta <Icon name="arrow" size={18} /></a>
+            <a className="button button-quiet" href={labHref(nextLesson.id)}>Continuar donde lo dejaste <Icon name="arrow" size={18} /></a>
           </div>
           <div className="hero-meta">
             <span><strong>{lessons.length}</strong> misiones guiadas</span>
             <span className="meta-divider" />
-            <span><strong>100%</strong> práctica</span>
+            <span><strong>sin cuentas</strong> ni repos reales</span>
+            <span className="meta-divider" />
+            <span><strong>progreso</strong> local</span>
           </div>
         </div>
 
         <div className="hero-card">
-          <div className="card-header"><span>tu siguiente paso</span><span>{nextLesson.duration}</span></div>
+          <div className="card-header"><span>siguiente misión</span><span>{nextLesson.duration}</span></div>
           <h2>{nextLesson.title}</h2>
           <p>{nextLesson.detail}</p>
           <BranchMap activeStep={completedLessons.includes(nextLesson.id) ? 2 : 1} />
           <div className="terminal-preview">
             <div className="terminal-bar"><span /><span /><span /><code>gitpath / starter</code></div>
-            <pre><span>$</span> git status{'\n'}En tu rama de trabajo{'\n'}<span>$</span> git add .{'\n'}<span>$</span> git commit -m <i>"mi primer paso"</i><b /></pre>
+            <pre><span>$</span> git status{'\n'}Lee antes de tocar{'\n'}<span>$</span> git add .{'\n'}<span>$</span> git commit -m <i>"mi primer paso"</i><b /></pre>
           </div>
           <a href={labHref(nextLesson.id)}>Abrir misión <Icon name="arrow" size={17} /></a>
         </div>
       </section>
 
       <section className="feature-strip shell" aria-label="Principios de GitPath">
-        <div><Icon name="target" size={22} /><span>Decisiones pequeñas<br /><strong>y reversibles</strong></span></div>
-        <div><Icon name="terminal" size={22} /><span>Comandos explicados<br /><strong>en un entorno seguro</strong></span></div>
-        <div><Icon name="shield" size={22} /><span>Errores frecuentes<br /><strong>convertidos en aprendizaje</strong></span></div>
+        <div><Icon name="target" size={22} /><span>Mira primero<br /><strong>decide después</strong></span></div>
+        <div><Icon name="terminal" size={22} /><span>Un comando por vez<br /><strong>con feedback claro</strong></span></div>
+        <div><Icon name="shield" size={22} /><span>Los errores también<br /><strong>dejan pistas</strong></span></div>
       </section>
 
       <section className="learning-overview shell">
