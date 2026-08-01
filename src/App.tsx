@@ -181,6 +181,10 @@ function Navigation({ path }: { path: string }) {
     { href: '/laboratorio', label: 'Laboratorio' },
     { href: '/progreso', label: 'Progreso' },
   ]
+  const renderNavItem = (item: { href: string; label: string }) => {
+    const isActive = path === item.href || path.startsWith(item.href + '/')
+    return <a aria-current={isActive ? 'page' : undefined} className={isActive ? 'nav-link-active' : undefined} href={item.href} key={item.href}>{item.label}</a>
+  }
 
   return (
     <nav className="nav shell" aria-label="Navegación principal">
@@ -190,13 +194,14 @@ function Navigation({ path }: { path: string }) {
       </a>
 
       <div className="nav-links">
-        {navItems.map((item) => {
-          const isActive = path === item.href || path.startsWith(item.href + '/')
-          return <a aria-current={isActive ? 'page' : undefined} className={isActive ? 'nav-link-active' : undefined} href={item.href} key={item.href}>{item.label}</a>
-        })}
+        {navItems.map(renderNavItem)}
       </div>
 
       <a className="nav-cta" href="/laboratorio">Practicar <Icon name="arrow" size={17} /></a>
+
+      <div className="nav-mobile-links" aria-label="Rutas de aprendizaje">
+        {navItems.map(renderNavItem)}
+      </div>
     </nav>
   )
 }
@@ -591,6 +596,7 @@ function LabPage({
 
   const completedWithActive = session.completed ? [...new Set([...completedLessons, activeLesson.id])] : completedLessons
   const nextLesson = getNextLesson(completedWithActive, activeLesson.id)
+  const suggestedCommand = session.completed ? undefined : activeLesson.steps[session.currentStep]?.command
 
   return (
     <>
@@ -633,6 +639,12 @@ function LabPage({
               </div>
             ))}
           </div>
+          {!session.completed && suggestedCommand && (
+            <div className="command-starter">
+              <div><strong>¿Quieres una base?</strong><span>Coloca el comando del paso actual y edítalo si lo necesitas.</span></div>
+              <button onClick={() => setCommand(suggestedCommand)} type="button">Usar comando sugerido <Icon name="arrow" size={15} /></button>
+            </div>
+          )}
           <div className="terminal-window" aria-live="polite">
             <div className="terminal-bar"><span /><span /><span /><code>gitpath / {activeLesson.id}</code></div>
             <div className="terminal-output">

@@ -452,6 +452,12 @@ main { overflow: hidden; }
 .command-step-done { color: #619177; }
 .command-step-done > span { color: #4e9668; background: #ddf2e4; }
 .command-step-done code { color: #55906b; }
+.command-starter { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 3px 12px; padding: 11px 12px; border: 1px solid #d7ddef; border-radius: 9px; background: rgba(255,255,255,.65); }
+.command-starter strong, .command-starter span { display: block; }
+.command-starter strong { color: #56627e; font-size: 10px; }
+.command-starter span { margin-top: 3px; color: #7d899f; font-size: 10px; line-height: 1.45; }
+.command-starter button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; padding: 7px 8px; border: 1px solid #ccd4ef; border-radius: 7px; color: #5969a1; background: #f8f9ff; font-size: 10px; font-weight: 800; }
+.command-starter button:hover { border-color: #aebae3; color: #46568f; background: #f0f3ff; }
 .terminal-window { border-radius: 10px; }
 .terminal-window .terminal-bar { height: 29px; }
 .terminal-output { min-height: 179px; max-height: 240px; padding: 13px 14px; overflow: auto; font: 10px/1.65 'DM Mono', monospace; }
@@ -553,6 +559,7 @@ main { background: var(--paper); }
 .nav-links { color: #70776f; }
 .nav-links .nav-link-active { color: var(--ink); }
 .nav-links .nav-link-active::after { background: var(--signal); }
+.nav-mobile-links { display: none; }
 .nav-cta { border-color: #c9c1b4; border-radius: 7px; color: var(--ink); box-shadow: 3px 3px 0 var(--paper-deep); }
 .nav-cta:hover { border-color: var(--signal); color: var(--signal); transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--paper-deep); }
 
@@ -608,6 +615,11 @@ main { background: var(--paper); }
 .failure-green code { color: var(--leaf); }
 .terminal-lab { border-color: var(--line); border-radius: 10px; background: #ebe6dc; box-shadow: 6px 6px 0 #d8d0c2; }
 .scenario-card { border-color: var(--line); border-radius: 9px; background: var(--card); box-shadow: 3px 3px 0 rgba(214, 205, 191, .55); }
+.command-starter { border-color: #d3c7b6; border-radius: 7px; background: #fffaf2; }
+.command-starter strong { color: var(--ink); }
+.command-starter span { color: var(--muted); }
+.command-starter button { border-color: #c8b9a7; border-radius: 6px; color: #405948; background: #eef3e9; }
+.command-starter button:hover { border-color: var(--leaf); color: #2f6342; background: #e2eee2; }
 .lesson-option-active { border-color: #dfb8a3; color: #81533e; background: #fff4ea; }
 .lesson-option-active > span { color: var(--signal); background: #f9dfd1; }
 .progress-row-done { border-color: #bdd9c2; background: #f9fdf7; }
@@ -624,9 +636,15 @@ main { background: var(--paper); }
 @media (max-width: 680px) {
   .shell { width: min(100% - 36px, 580px); }
   .page-note { width: min(100%, 320px); }
+  .nav { height: auto; min-height: 82px; flex-wrap: wrap; padding: 14px 0 12px; }
+  .nav-mobile-links { display: flex; order: 4; width: 100%; justify-content: space-between; gap: 10px; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); color: #637067; font-size: 10px; font-weight: 800; }
+  .nav-mobile-links a { position: relative; padding-bottom: 4px; white-space: nowrap; }
+  .nav-mobile-links .nav-link-active { color: var(--ink); }
+  .nav-mobile-links .nav-link-active::after { content: ''; position: absolute; right: 0; bottom: 0; left: 0; height: 2px; border-radius: 2px; background: var(--signal); }
 }
 
 @media (max-width: 500px) {
   .page-note { padding: 21px; }
   .page-note-quote { font-size: 21px; }
+  .command-starter { align-items: flex-start; flex-direction: column; }
 }
