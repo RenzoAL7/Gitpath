@@ -1,10 +1,15 @@
 import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import { GraphBoard } from './components/GraphBoard'
+import { challenges, challengeWorlds, type Challenge } from './data/challenges'
 import { courseChapters, courseSlides, type VisualKind } from './data/course'
-import { lessons, type Lesson } from './data/lessons'
-import { createSession, runCommand, type SimulatorState } from './lib/git-simulator'
+import { createChallengeSession, runChallengeCommand, type ChallengeState } from './lib/challenge-simulator'
 
-const PRACTICE_PROGRESS_KEY = 'gitpath:completed-lessons:v2'
+const PRACTICE_PROGRESS_KEY = 'gitpath:completed-challenges:v1'
 const COURSE_PROGRESS_KEY = 'gitpath:viewed-slides:v1'
+const SETUP_PROGRESS_KEY = 'gitpath:setup-progress:v1'
+const SETUP_STEP_IDS = ['git-install', 'git-verify', 'git-identity', 'desktop-install', 'desktop-login', 'desktop-clone'] as const
+type SetupStepId = (typeof SETUP_STEP_IDS)[number]
+type OperatingSystem = 'windows' | 'mac' | 'linux'
 
 type IconName =
   | 'arrow'
@@ -71,12 +76,8 @@ function currentPath() {
   return normalizePath(window.location.pathname)
 }
 
-function lessonHref(lessonId: string) {
-  return `/ruta/${lessonId}`
-}
-
 function labHref(lessonId?: string) {
-  return lessonId ? `/laboratorio?lesson=${encodeURIComponent(lessonId)}` : '/laboratorio'
+  return lessonId ? `/ejercicios?level=${encodeURIComponent(lessonId)}` : '/ejercicios'
 }
 
 function courseHref(slideId?: string) {
@@ -94,11 +95,12 @@ function readStoredList(key: string, allowed: Set<string>) {
   }
 }
 
-function Navigation({ path, learnedCount }: { path: string; learnedCount: number }) {
+function Navigation({ path, learnedCount, totalCount }: { path: string; learnedCount: number; totalCount: number }) {
   const items = [
-    { href: '/aprender', label: 'Curso visual', match: ['/aprender', '/fundamentos', '/ramas-y-prs'] },
-    { href: '/laboratorio', label: 'Laboratorio', match: ['/laboratorio'] },
-    { href: '/progreso', label: 'Mi progreso', match: ['/progreso'] },
+    { href: '/instalar', label: 'Instalar', match: ['/instalar'] },
+    { href: '/github-desktop', label: 'GitHub Desktop', match: ['/github-desktop'] },
+    { href: '/aprender', label: 'Entender Git', match: ['/aprender', '/fundamentos', '/ramas-y-prs'] },
+    { href: '/ejercicios', label: 'Ejercicios', match: ['/ejercicios', '/laboratorio'] },
   ]
 
   return (
@@ -111,25 +113,25 @@ function Navigation({ path, learnedCount }: { path: string; learnedCount: number
             return <a aria-current={active ? 'page' : undefined} className={active ? 'active' : ''} href={item.href} key={item.href}>{item.label}</a>
           })}
         </div>
-        <a className="nav-progress" href="/progreso" aria-label={`${learnedCount} de ${courseSlides.length} escenas vistas`}>
-          <span className="progress-ring" style={{ '--progress': `${Math.round((learnedCount / courseSlides.length) * 360)}deg` } as CSSProperties}><i /></span>
-          <span><strong>{learnedCount}/{courseSlides.length}</strong><small>escenas</small></span>
+        <a className="nav-progress" href="/progreso" aria-label={`${learnedCount} de ${totalCount} pasos completados`}>
+          <span className="progress-ring" style={{ '--progress': `${Math.round((learnedCount / totalCount) * 360)}deg` } as CSSProperties}><i /></span>
+          <span><strong>{Math.round((learnedCount / totalCount) * 100)}%</strong><small>ruta</small></span>
         </a>
       </nav>
     </header>
   )
 }
 
-function AppShell({ children, path, learnedCount, minimal = false }: { children: ReactNode; path: string; learnedCount: number; minimal?: boolean }) {
+function AppShell({ children, path, learnedCount, totalCount, minimal = false }: { children: ReactNode; path: string; learnedCount: number; totalCount: number; minimal?: boolean }) {
   return (
     <main>
-      <Navigation path={path} learnedCount={learnedCount} />
+      <Navigation path={path} learnedCount={learnedCount} totalCount={totalCount} />
       {children}
       {!minimal && (
         <footer className="footer page-width">
           <a href="/"><Logo /></a>
-          <p>Una explicación visual de Git para dejar de copiar comandos a ciegas.</p>
-          <div><a href="/aprender">Aprender</a><a href="/laboratorio">Practicar</a><a href="https://github.com/RenzoAL7/Gitpath" rel="noreferrer" target="_blank">GitHub ↗</a></div>
+          <p>De la instalación a tu primera rama, explicado como un mapa.</p>
+          <div><a href="/instalar">Empezar</a><a href="/ejercicios">Practicar</a><a href="https://github.com/RenzoAL7/Gitpath" rel="noreferrer" target="_blank">Código ↗</a></div>
         </footer>
       )}
     </main>
@@ -235,52 +237,162 @@ function CourseVisual({ kind, compact = false }: { kind: VisualKind; compact?: b
   )
 }
 
-function HomePage({ viewedSlides, completedLessons }: { viewedSlides: string[]; completedLessons: string[] }) {
-  const firstUnseen = courseSlides.find((slide) => !viewedSlides.includes(slide.id)) ?? courseSlides[courseSlides.length - 1]
-  const resumeLabel = viewedSlides.length ? 'Continuar curso' : 'Empezar el curso'
+function HomePage({ viewedSlides, completedChallenges, setupProgress }: { viewedSlides: string[]; completedChallenges: string[]; setupProgress: string[] }) {
+  const hasProgress = viewedSlides.length + completedChallenges.length + setupProgress.length > 0
+  const gitReady = SETUP_STEP_IDS.slice(0, 3).every((step) => setupProgress.includes(step))
+  const desktopReady = SETUP_STEP_IDS.slice(3).every((step) => setupProgress.includes(step))
+  const nextHref = !gitReady ? '/instalar' : !desktopReady ? '/github-desktop' : viewedSlides.length < courseSlides.length ? courseHref(courseSlides.find((slide) => !viewedSlides.includes(slide.id))?.id) : '/ejercicios'
+  const previewState = createChallengeSession(challenges[1])
+
+  const route = [
+    { number: '01', href: '/instalar', title: 'Prepara tu equipo', text: 'Instala Git en Windows, macOS o Linux y comprueba que funciona.', icon: 'code' as IconName, meta: '5–10 min' },
+    { number: '02', href: '/github-desktop', title: 'Conoce GitHub Desktop', text: 'Entiende repositorio, cambios, commit, push y pull con una interfaz visual.', icon: 'layers' as IconName, meta: '8 min' },
+    { number: '03', href: '/aprender', title: 'Mira Git por dentro', text: 'Aprende commits, ramas, HEAD y staging como escenas, no como definiciones.', icon: 'book' as IconName, meta: `${courseSlides.length} escenas` },
+    { number: '04', href: '/ejercicios', title: 'Mueve el grafo', text: 'Resuelve niveles básicos y observa cómo cambia la historia con cada comando.', icon: 'branch' as IconName, meta: `${challenges.length} niveles` },
+  ]
 
   return (
     <>
-      <section className="home-hero page-width">
-        <div className="hero-copy">
-          <div className="eyebrow"><span>CURSO VISUAL</span><i />13 MIN · EN ESPAÑOL</div>
-          <h1>Deja de memorizar Git.<br /><em>Empieza a verlo.</em></h1>
-          <p>Una explicación visual para entender qué son realmente los commits, las ramas, HEAD y las formas seguras de volver atrás.</p>
+      <section className="journey-hero page-width">
+        <div className="journey-copy">
+          <div className="eyebrow"><span>GIT DESDE CERO</span><i />SIN ASUMIR NADA</div>
+          <h1>Tu camino para<br /><em>entender Git.</em></h1>
+          <p>Empieza instalando las herramientas. Termina creando ramas, uniendo historias y entendiendo cada movimiento que haces.</p>
           <div className="hero-actions">
-            <a className="button primary" href={courseHref(firstUnseen.id)}><Icon name="play" size={18} />{resumeLabel}</a>
-            <a className="button quiet" href="/laboratorio">Ir a los ejercicios <Icon name="arrow" size={18} /></a>
+            <a className="button primary" href={nextHref}><Icon name="play" size={18} />{hasProgress ? 'Continuar mi ruta' : 'Empezar desde cero'}</a>
+            <a className="button quiet" href="/ejercicios">Ver ejercicios <Icon name="arrow" size={18} /></a>
           </div>
-          <div className="hero-proof"><span><Icon name="check" size={15} /> Sin registro</span><span><Icon name="check" size={15} /> A tu ritmo</span><span><Icon name="check" size={15} /> Desde cero</span></div>
+          <div className="hero-proof"><span><Icon name="check" size={15} /> En español</span><span><Icon name="check" size={15} /> Sin registro</span><span><Icon name="check" size={15} /> Progreso local</span></div>
         </div>
-
-        <a className="hero-slide" href={courseHref(firstUnseen.id)} aria-label={`Abrir escena: ${firstUnseen.title}`}>
-          <div className="hero-slide-top"><span>GIT POR DENTRO</span><span>{String(Math.max(viewedSlides.length + 1, 1)).padStart(2, '0')} / {courseSlides.length}</span></div>
-          <CourseVisual kind="cover" compact />
-          <div className="hero-slide-bottom"><div><small>IDEA 01</small><strong>Git es un mapa de objetos y punteros.</strong></div><span><Icon name="arrow" size={21} /></span></div>
-        </a>
+        <div className="journey-map" aria-label="Ruta de aprendizaje de Git">
+          <div className="journey-map-head"><span>TU MAPA</span><small>DE CERO A TU PRIMER MERGE</small></div>
+          <div className="journey-map-line" />
+          {route.map((item, index) => <a className={`journey-stop stop-${index + 1}`} href={item.href} key={item.number}><span>{item.number}</span><div><small>{item.meta}</small><strong>{item.title}</strong></div></a>)}
+          <div className="journey-map-status"><i /><span>Empieza aquí</span><strong>Instala Git</strong></div>
+        </div>
       </section>
 
-      <section className="chapter-section page-width">
-        <div className="section-title"><div><span className="eyebrow">EL RECORRIDO</span><h2>Cuatro ideas. Una caja negra menos.</h2></div><p>Avanza como en una presentación: una escena, una idea y un dibujo a la vez.</p></div>
-        <div className="chapter-grid">
-          {courseChapters.map((chapter, index) => (
-            <a href={courseHref(chapter.slideId)} key={chapter.number}>
-              <span>{chapter.number}</span><div className={`chapter-icon chapter-icon-${index}`}><Icon name={(['layers', 'branch', 'commit', 'shield'] as IconName[])[index]} size={24} /></div>
-              <h3>{chapter.title}</h3><p>{['Commits y grafos', 'Ramas y HEAD', 'Working tree y staging', 'Restore, reset y reflog'][index]}</p><Icon name="arrow" size={18} />
+      <section className="route-section page-width">
+        <div className="section-title"><div><span className="eyebrow">LA RUTA COMPLETA</span><h2>Primero prepara. Luego entiende. Al final, practica.</h2></div><p>No necesitas saber qué es una terminal ni haber creado un repositorio antes.</p></div>
+        <div className="route-grid">
+          {route.map((item, index) => (
+            <a href={item.href} key={item.number}>
+              <header><span>{item.number}</span><small>{item.meta}</small></header>
+              <div className={`route-icon route-icon-${index}`}><Icon name={item.icon} size={25} /></div>
+              <h3>{item.title}</h3><p>{item.text}</p><strong>Entrar <Icon name="arrow" size={16} /></strong>
             </a>
           ))}
         </div>
       </section>
 
-      <section className="practice-teaser page-width">
-        <div className="practice-visual">
-          <div className="terminal-mini"><header><i /><i /><i /><span>gitpath / sandbox</span></header><pre><b>$</b> git status{`\n`}On branch main{`\n`}<b>$</b> git switch -c feat/perfil<span>▌</span></pre></div>
-          <div className="practice-graph"><span>HEAD</span><div /><i /><i /><i /></div>
-        </div>
-        <div className="practice-copy"><span className="eyebrow">APARTADO PRÁCTICO</span><h2>Cuando quieras probarlo, el laboratorio te espera.</h2><p>{lessons.length} escenarios seguros para escribir comandos, ver el estado del repositorio y equivocarte sin tocar un proyecto real.</p><div><a className="button light" href={labHref()}>Abrir laboratorio <Icon name="arrow" size={18} /></a><span>{completedLessons.length}/{lessons.length} ejercicios completados</span></div></div>
+      <section className="graph-teaser page-width">
+        <div className="graph-teaser-copy"><span className="eyebrow">APRENDER HACIENDO</span><h2>No imagines qué hizo el comando. Míralo.</h2><p>El laboratorio dibuja commits, ramas y HEAD en tiempo real. Cada nivel tiene un objetivo corto, una pista y un reinicio seguro.</p><div><a className="button light" href="/ejercicios">Abrir los niveles <Icon name="arrow" size={18} /></a><span>{completedChallenges.length}/{challenges.length} resueltos</span></div></div>
+        <div className="graph-teaser-board"><div className="graph-teaser-chrome"><i /><i /><i /><span>gitpath / nivel 02</span></div><GraphBoard compact state={previewState} /><code><b>$</b> git branch feature<span>▌</span></code></div>
       </section>
     </>
   )
+}
+
+const installationData: Record<OperatingSystem, { label: string; note: string; recommended: string; alternatives: { title: string; command: string; copy?: boolean; text: string }[] }> = {
+  windows: {
+    label: 'Windows',
+    note: 'Windows 10 u 11 · x64 o ARM64',
+    recommended: 'Instalador oficial de Git for Windows',
+    alternatives: [
+      { title: 'Opción recomendada', command: 'Descargar el instalador oficial', text: 'Ábrelo, conserva las opciones recomendadas y termina la instalación.' },
+      { title: 'Con Windows Package Manager', command: 'winget install --id Git.Git -e --source winget', copy: true, text: 'Pega este comando en PowerShell si ya usas winget.' },
+    ],
+  },
+  mac: {
+    label: 'macOS',
+    note: 'Apple silicon o Intel',
+    recommended: 'Xcode Command Line Tools',
+    alternatives: [
+      { title: 'La forma más simple', command: 'xcode-select --install', copy: true, text: 'macOS abrirá una ventana. Confirma y espera a que termine.' },
+      { title: 'Si ya usas Homebrew', command: 'brew install git', copy: true, text: 'Homebrew instala y actualiza Git desde la terminal.' },
+    ],
+  },
+  linux: {
+    label: 'Linux',
+    note: 'Ubuntu, Fedora, Arch y más',
+    recommended: 'Gestor de paquetes de tu distribución',
+    alternatives: [
+      { title: 'Debian / Ubuntu', command: 'sudo apt update && sudo apt install git', copy: true, text: 'Actualiza el índice e instala el paquete mantenido por tu distribución.' },
+      { title: 'Fedora', command: 'sudo dnf install git', copy: true, text: 'Usa dnf para instalar Git en Fedora.' },
+      { title: 'Arch Linux', command: 'sudo pacman -S git', copy: true, text: 'Instala Git desde los repositorios oficiales de Arch.' },
+    ],
+  },
+}
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    await navigator.clipboard.writeText(value)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1600)
+  }
+  return <button aria-label={`Copiar ${value}`} className="copy-button" onClick={copy} type="button">{copied ? <><Icon name="check" size={14} /> Copiado</> : 'Copiar'}</button>
+}
+
+function InstallationPage({ completed, onToggle }: { completed: string[]; onToggle: (id: SetupStepId) => void }) {
+  const platform = typeof navigator === 'undefined' ? '' : `${navigator.platform} ${navigator.userAgent}`.toLowerCase()
+  const detected: OperatingSystem = platform.includes('win') ? 'windows' : platform.includes('mac') ? 'mac' : 'linux'
+  const [os, setOs] = useState<OperatingSystem>(detected)
+  const data = installationData[os]
+  const gitSteps: { id: SetupStepId; title: string; text: string }[] = [
+    { id: 'git-install', title: `Instalé Git en ${data.label}`, text: 'El instalador o gestor de paquetes terminó sin errores.' },
+    { id: 'git-verify', title: 'Comprobé la instalación', text: 'El comando git --version mostró un número de versión.' },
+    { id: 'git-identity', title: 'Configuré mi nombre y correo', text: 'Git usará estos datos para identificar mis commits.' },
+  ]
+
+  return (
+    <div className="setup-page">
+      <section className="setup-hero page-width">
+        <div><span className="eyebrow">PASO 01 · PREPARA TU EQUIPO</span><h1>Instala Git.<br /><em>Empieza bien.</em></h1><p>Git es el motor que guarda la historia de tu proyecto. Elige tu sistema y completa solo lo necesario.</p><div className="setup-progress-pill"><span>{completed.filter((id) => id.startsWith('git-')).length}/3</span><div><strong>Preparación de Git</strong><small>Se guarda en este navegador</small></div></div></div>
+        <div className="setup-terminal"><header><i /><i /><i /><span>terminal</span></header><div><p><b>$</b> git --version</p><p className="terminal-answer">git version 2.x.x</p><p><b>$</b> git config --global user.name <em>"Tu nombre"</em></p><p><b>$</b> git config --global user.email <em>"tu@correo.com"</em></p><span>LISTO PARA CREAR HISTORIA</span></div></div>
+      </section>
+
+      <section className="install-panel page-width">
+        <div className="install-panel-head"><div><span className="eyebrow">ELIGE TU SISTEMA</span><h2>Instrucciones para tu computadora.</h2></div><span>Detectamos <strong>{installationData[detected].label}</strong>. Puedes cambiarlo.</span></div>
+        <div className="os-tabs" role="tablist" aria-label="Sistema operativo">
+          {(Object.keys(installationData) as OperatingSystem[]).map((key) => <button aria-selected={os === key} className={os === key ? 'active' : ''} onClick={() => setOs(key)} role="tab" type="button" key={key}><span className={`os-symbol os-${key}`} aria-hidden="true" />{installationData[key].label}<small>{installationData[key].note}</small></button>)}
+        </div>
+        <div className="install-content" key={os}>
+          <aside><span>RECOMENDADO</span><h3>{data.recommended}</h3><p>Usa una sola opción. No necesitas instalar Git dos veces.</p><a href={os === 'windows' ? 'https://git-scm.com/install/windows' : os === 'mac' ? 'https://git-scm.com/install/mac' : 'https://git-scm.com/install/linux'} rel="noreferrer" target="_blank">Abrir guía oficial <Icon name="arrow" size={15} /></a></aside>
+          <div className="install-options">{data.alternatives.map((option, index) => <article key={option.title}><span>{String(index + 1).padStart(2, '0')}</span><div><small>{option.title}</small><code>{option.command}</code><p>{option.text}</p></div>{option.copy ? <CopyButton value={option.command} /> : <a className="copy-button" href="https://git-scm.com/downloads" rel="noreferrer" target="_blank">Descargar</a>}</article>)}</div>
+        </div>
+      </section>
+
+      <section className="verify-section page-width">
+        <div className="section-title"><div><span className="eyebrow">COMPRUEBA Y CONFIGURA</span><h2>Tres checks y seguimos.</h2></div><p>No marcamos nada automáticamente: confirma lo que realmente hiciste en tu equipo.</p></div>
+        <div className="verify-grid">
+          {gitSteps.map((step, index) => <button className={completed.includes(step.id) ? 'done' : ''} onClick={() => onToggle(step.id)} type="button" key={step.id}><span>{completed.includes(step.id) ? <Icon name="check" size={18} /> : index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p>{index === 1 && <code>git --version</code>}{index === 2 && <code>git config --global user.name "Tu nombre"</code>}</div></button>)}
+        </div>
+        <div className="next-route-card"><div><span>PASO 02</span><h3>Ahora instala GitHub Desktop.</h3><p>Te dará una vista gráfica para ver cambios, commits y ramas sin depender de la terminal.</p></div><a className="button primary" href="/github-desktop">Continuar <Icon name="arrow" size={18} /></a></div>
+      </section>
+    </div>
+  )
+}
+
+function DesktopMockup() {
+  return <div aria-hidden="true" className="desktop-mockup"><header><i /><i /><i /><span>GitPath — GitHub Desktop</span></header><div className="desktop-toolbar"><strong>Current repository <b>GitPath⌄</b></strong><strong>Current branch <b>main⌄</b></strong><span className="desktop-fetch">Fetch origin</span></div><div className="desktop-body"><aside><span>3 changed files</span><p className="selected"><i /> App.tsx <b>+24 −3</b></p><p><i /> index.css <b>+18</b></p><p><i /> README.md <b>+4</b></p><div className="desktop-commit"><strong>Explica la instalación</strong><p>Añade la ruta inicial para nuevos usuarios.</p><span>Commit to main</span></div></aside><section><div className="desktop-file-head"><span>src/App.tsx</span><small>24 additions, 3 deletions</small></div><pre><b>+ </b>function InstallationPage() {'{'}{`\n`}<b>+   </b>return &lt;Guide platform="mac" /&gt;{`\n`}<b>+ </b>{'}'}{`\n`}  export default App</pre></section></div><div className="desktop-callout callout-repo">1 <span>Repositorio actual</span></div><div className="desktop-callout callout-branch">2 <span>Rama actual</span></div><div className="desktop-callout callout-sync">3 <span>Pull / Push</span></div><div className="desktop-callout callout-files">4 <span>Archivos cambiados</span></div><div className="desktop-callout callout-commit">5 <span>Crear commit</span></div></div>
+}
+
+function GitHubDesktopPage({ completed, onToggle }: { completed: string[]; onToggle: (id: SetupStepId) => void }) {
+  const desktopSteps: { id: SetupStepId; title: string; text: string }[] = [
+    { id: 'desktop-install', title: 'Instala la aplicación', text: 'Disponible oficialmente para Windows 10 de 64 bits o posterior y macOS 12 o posterior.' },
+    { id: 'desktop-login', title: 'Inicia sesión en GitHub.com', text: 'La sesión permite clonar, publicar, hacer pull y push sin configurar credenciales a mano.' },
+    { id: 'desktop-clone', title: 'Clona tu primer repositorio', text: 'File → Clone repository descarga una copia de GitHub a tu computadora.' },
+  ]
+  return <div className="desktop-page">
+    <section className="desktop-hero page-width"><div><span className="eyebrow">PASO 02 · TU MAPA VISUAL</span><h1>GitHub Desktop,<br /><em>sin misterio.</em></h1><p>Es una interfaz para usar Git: ves qué archivos cambiaron, eliges qué guardar, creas commits y sincronizas con GitHub.</p><div className="hero-actions"><a className="button primary" href="https://desktop.github.com/download/" rel="noreferrer" target="_blank">Descargar GitHub Desktop <Icon name="arrow" size={18} /></a><a className="button quiet" href="#como-funciona">Ver cómo funciona</a></div><small>GitHub Desktop no reemplaza Git: lo controla con una interfaz gráfica.</small></div><DesktopMockup /></section>
+    <section className="desktop-purpose page-width" id="como-funciona"><div className="section-title"><div><span className="eyebrow">PARA QUÉ SIRVE</span><h2>De tus archivos a GitHub, en cinco movimientos.</h2></div><p>La interfaz cambia, pero el modelo mental es el mismo que aprenderás en el curso.</p></div><div className="purpose-flow">{[
+      ['01', 'Editas', 'Cambias archivos en tu editor.'], ['02', 'Revisas', 'Desktop muestra el diff.'], ['03', 'Commit', 'Guardas una fotografía local.'], ['04', 'Push', 'Subes commits a GitHub.'], ['05', 'Pull', 'Traes el trabajo del equipo.'],
+    ].map(([number, title, text], index) => <article key={number}><span>{number}</span><div className={`purpose-icon purpose-${index}`}><Icon name={(['code', 'book', 'commit', 'arrow', 'refresh'] as IconName[])[index]} size={21} /></div><strong>{title}</strong><p>{text}</p></article>)}</div></section>
+    <section className="desktop-install page-width"><div className="desktop-install-copy"><span className="eyebrow">INSTALACIÓN GUIADA</span><h2>Tres pasos para quedar listo.</h2><p>La descarga oficial detecta Windows o macOS. En Linux, GitHub Desktop todavía no tiene soporte oficial; puedes usar Git en terminal o una interfaz alternativa.</p><a href="https://docs.github.com/es/desktop/installing-and-authenticating-to-github-desktop/installing-github-desktop" rel="noreferrer" target="_blank">Leer documentación oficial <Icon name="arrow" size={15} /></a></div><div className="desktop-install-right"><div className="desktop-platforms"><article><span className="os-symbol os-windows" /><div><strong>Windows</strong><p>Descarga el archivo de instalación, ábrelo y espera a que Desktop inicie.</p><small>Windows 10 de 64 bits o posterior</small></div></article><article><span className="os-symbol os-mac" /><div><strong>macOS</strong><p>Abre el ZIP descargado y después la aplicación GitHub Desktop.</p><small>macOS 12 o posterior</small></div></article><article><span className="os-symbol os-linux" /><div><strong>Linux</strong><p>No existe una versión oficial. GitPath funciona sin instalar Desktop.</p><small>Continúa con Git en terminal</small></div></article></div><div className="desktop-checklist">{desktopSteps.map((step, index) => <button className={completed.includes(step.id) ? 'done' : ''} onClick={() => onToggle(step.id)} type="button" key={step.id}><span>{completed.includes(step.id) ? <Icon name="check" size={17} /> : index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></button>)}</div></div></section>
+    <section className="desktop-vocabulary page-width"><div><span className="eyebrow">TRADUCE LA INTERFAZ</span><h2>Cuando Desktop dice…</h2></div><div>{[['Changes', 'Archivos modificados que todavía no están en un commit.'], ['Commit', 'Fotografía local con un mensaje y un padre.'], ['Push origin', 'Enviar tus commits locales al repositorio remoto.'], ['Fetch / Pull', 'Buscar y traer nuevos commits del remoto.'], ['Branch', 'Un nombre móvil que apunta a un commit.']].map(([term, text]) => <article key={term}><code>{term}</code><p>{text}</p></article>)}</div></section>
+    <section className="next-route-card page-width"><div><span>PASO 03</span><h3>Ya tienes las herramientas. Ahora mira Git por dentro.</h3><p>Las escenas visuales explican qué cambia realmente al hacer commit, branch, merge o rebase.</p></div><a className="button primary" href="/aprender">Abrir curso visual <Icon name="arrow" size={18} /></a></section>
+  </div>
 }
 
 function CoursePage({ viewedSlides, onView, initialSlideId }: { viewedSlides: string[]; onView: (slideId: string) => void; initialSlideId?: string }) {
@@ -321,7 +433,7 @@ function CoursePage({ viewedSlides, onView, initialSlideId }: { viewedSlides: st
             return <button className={active ? 'active' : ''} onClick={() => goTo(chapterIndex)} type="button" key={chapter.number}><span>{completed ? <Icon name="check" size={14} /> : chapter.number}</span><div><small>CAPÍTULO {chapter.number}</small><strong>{chapter.title}</strong></div></button>
           })}
         </div>
-        <a className="rail-practice" href="/laboratorio"><Icon name="terminal" size={18} /><span><small>DESPUÉS DEL CURSO</small><strong>Practica en el laboratorio</strong></span><Icon name="arrow" size={16} /></a>
+        <a className="rail-practice" href="/ejercicios"><Icon name="terminal" size={18} /><span><small>DESPUÉS DEL CURSO</small><strong>Mueve el grafo</strong></span><Icon name="arrow" size={16} /></a>
       </aside>
 
       <section className="slide-area">
@@ -340,7 +452,7 @@ function CoursePage({ viewedSlides, onView, initialSlideId }: { viewedSlides: st
         <div className="slide-controls">
           <button disabled={slideIndex === 0} onClick={() => goTo(slideIndex - 1)} type="button"><Icon name="arrowLeft" size={18} /><span>Anterior</span></button>
           <div className="slide-dots" aria-label="Escenas del curso">{courseSlides.map((item, index) => <button aria-label={`Ir a ${item.title}`} className={index === slideIndex ? 'active' : viewedSlides.includes(item.id) ? 'seen' : ''} onClick={() => goTo(index)} type="button" key={item.id} />)}</div>
-          {slideIndex < courseSlides.length - 1 ? <button className="next" onClick={() => goTo(slideIndex + 1)} type="button"><span>Siguiente</span><Icon name="arrow" size={18} /></button> : <a className="finish" href="/laboratorio"><span>Ir a practicar</span><Icon name="arrow" size={18} /></a>}
+          {slideIndex < courseSlides.length - 1 ? <button className="next" onClick={() => goTo(slideIndex + 1)} type="button"><span>Siguiente</span><Icon name="arrow" size={18} /></button> : <a className="finish" href="/ejercicios"><span>Ir a practicar</span><Icon name="arrow" size={18} /></a>}
         </div>
         <p className="keyboard-hint"><kbd>←</kbd><kbd>→</kbd> también puedes usar las flechas del teclado</p>
       </section>
@@ -348,119 +460,85 @@ function CoursePage({ viewedSlides, onView, initialSlideId }: { viewedSlides: st
   )
 }
 
-function RepoMap({ session }: { session: SimulatorState }) {
-  return (
-    <div className="repo-map">
-      <div className="repo-map-head"><span><i /> REPOSITORIO EN VIVO</span><code>HEAD → {session.currentBranch}</code></div>
-      <div className="repo-lanes">
-        {session.branches.map((branch) => {
-          const active = branch === session.currentBranch
-          return <div className={active ? 'repo-lane active' : 'repo-lane'} key={branch}><span>{branch}</span><div className="repo-track">{session.commits.slice(-3).map((commit, index) => <i className={active && index === session.commits.slice(-3).length - 1 ? 'current' : ''} key={`${branch}-${commit}-${index}`}><small>{commit}</small></i>)}</div></div>
-        })}
-      </div>
-      <div className="repo-state"><span><i className={session.workingTree === 'clean' ? 'green' : 'orange'} />working tree: {session.workingTree}</span><span><i className={session.staged ? 'purple' : ''} />staging: {session.staged ? '1 cambio' : 'vacío'}</span></div>
-    </div>
-  )
-}
-
-function LabPage({ completedLessons, onComplete }: { completedLessons: string[]; onComplete: (lessonId: string) => void }) {
-  const lessonFromQuery = (() => {
+function ChallengeLabPage({ completedChallenges, onComplete }: { completedChallenges: string[]; onComplete: (challengeId: string) => void }) {
+  const fromQuery = (() => {
     if (typeof window === 'undefined') return undefined
-    const id = new URLSearchParams(window.location.search).get('lesson')
-    return lessons.find((lesson) => lesson.id === id)
+    const id = new URLSearchParams(window.location.search).get('level')
+    return challenges.find((challenge) => challenge.id === id)
   })()
-  const initialLesson = lessonFromQuery ?? lessons.find((lesson) => !completedLessons.includes(lesson.id)) ?? lessons[0]
-  const [activeLesson, setActiveLesson] = useState(initialLesson)
-  const [session, setSession] = useState<SimulatorState>(() => createSession(initialLesson))
+  const initial = fromQuery ?? challenges.find((challenge) => !completedChallenges.includes(challenge.id)) ?? challenges[0]
+  const [active, setActive] = useState<Challenge>(initial)
+  const [session, setSession] = useState<ChallengeState>(() => createChallengeSession(initial))
   const [command, setCommand] = useState('')
+  const currentStep = active.steps[session.currentStep]
 
-  const chooseLesson = (lesson: Lesson) => {
-    setActiveLesson(lesson)
-    setSession(createSession(lesson))
+  const choose = (challenge: Challenge) => {
+    setActive(challenge)
+    setSession(createChallengeSession(challenge))
     setCommand('')
-    window.history.replaceState({}, '', labHref(lesson.id))
+    window.history.replaceState({}, '', labHref(challenge.id))
   }
-
   const execute = (event: FormEvent) => {
     event.preventDefault()
     if (!command.trim()) return
-    const result = runCommand(session, activeLesson, command)
+    const result = runChallengeCommand(session, active, command)
     setSession(result.state)
     setCommand('')
-    if (result.state.completed) onComplete(activeLesson.id)
+    if (result.state.completed) onComplete(active.id)
   }
-
-  const resetSession = () => {
-    setSession(createSession(activeLesson))
+  const reset = () => {
+    setSession(createChallengeSession(active))
     setCommand('')
   }
+  const nextChallenge = challenges[challenges.findIndex((challenge) => challenge.id === active.id) + 1]
 
-  const suggested = !session.completed ? activeLesson.steps[session.currentStep]?.command : undefined
-
-  return (
-    <div className="lab-page page-width">
-      <header className="lab-hero"><div><span className="eyebrow">LABORATORIO · APARTADO PRÁCTICO</span><h1>Ahora sí: mueve el repositorio.</h1><p>Prueba comandos dentro de un entorno simulado. Ves el resultado, recibes una pista y puedes reiniciar cuantas veces quieras.</p></div><div className="lab-score"><strong>{completedLessons.length}/{lessons.length}</strong><span>misiones<br />completadas</span></div></header>
-
-      <div className="lab-workspace">
-        <aside className="mission-list">
-          <div className="mission-list-title"><span>MISIONES</span><small>elige un escenario</small></div>
-          {lessons.map((lesson) => {
-            const active = lesson.id === activeLesson.id
-            const done = completedLessons.includes(lesson.id)
-            return <button className={active ? 'active' : ''} onClick={() => chooseLesson(lesson)} type="button" key={lesson.id}><span className={done ? 'done' : ''}>{done ? <Icon name="check" size={15} /> : lesson.number}</span><div><strong>{lesson.shortTitle}</strong><small>{lesson.level} · {lesson.duration}</small></div><Icon name="arrow" size={15} /></button>
-          })}
-          <a href={lessonHref(activeLesson.id)}><Icon name="book" size={16} />Leer la guía de esta misión</a>
-        </aside>
-
-        <section className="lab-console">
-          <div className="mission-brief"><div><span>{activeLesson.number} · {activeLesson.category.toUpperCase()}</span><h2>{activeLesson.title}</h2><p>{activeLesson.scenario}</p></div><div><small>OBJETIVO</small><strong>{activeLesson.objective}</strong></div></div>
-          <RepoMap session={session} />
-          <div className="steps-row">{activeLesson.steps.map((step, index) => <div className={index < session.currentStep || session.completed ? 'done' : index === session.currentStep ? 'current' : ''} key={step.command}><span>{index < session.currentStep || session.completed ? <Icon name="check" size={14} /> : index + 1}</span><code>{step.command}</code></div>)}</div>
-          <div className="terminal-window">
-            <header><span><i /><i /><i />gitpath / {activeLesson.id}</span><button onClick={resetSession} type="button"><Icon name="refresh" size={14} />Reiniciar</button></header>
-            <div className="terminal-transcript" aria-live="polite">
-              {session.transcript.map((entry, index) => <div className={`terminal-entry ${entry.type}`} key={`${entry.type}-${index}`}>{entry.type === 'command' ? <code><b>$</b> {entry.text}</code> : <p>{entry.text}</p>}</div>)}
-            </div>
-            <form onSubmit={execute}><span>$</span><input aria-label="Comando de Git" autoCapitalize="none" autoComplete="off" disabled={session.completed} onChange={(event) => setCommand(event.target.value)} placeholder={session.completed ? 'Misión completada' : 'escribe un comando...'} spellCheck={false} value={command} /><button disabled={session.completed} type="submit">Ejecutar <Icon name="arrow" size={16} /></button></form>
+  return <div className="challenge-page">
+    <aside className="challenge-sidebar">
+      <div className="challenge-sidebar-head"><span>LABORATORIO</span><strong>Aprende moviendo</strong><small>{completedChallenges.length}/{challenges.length} niveles resueltos</small></div>
+      {challengeWorlds.map((world) => <section key={world}><header><span>{world}</span><small>{challenges.filter((challenge) => challenge.world === world).length} niveles</small></header>{challenges.filter((challenge) => challenge.world === world).map((challenge) => {
+        const done = completedChallenges.includes(challenge.id)
+        return <button className={active.id === challenge.id ? 'active' : ''} onClick={() => choose(challenge)} type="button" key={challenge.id}><span className={done ? 'done' : ''}>{done ? <Icon name="check" size={14} /> : challenge.number}</span><div><strong>{challenge.shortTitle}</strong><small>{challenge.difficulty} · {challenge.duration}</small></div><Icon name="arrow" size={14} /></button>
+      })}</section>)}
+      <div className="challenge-attribution"><span>INSPIRACIÓN</span><p>Concepto de niveles inspirado en Learn Git Branching, proyecto de Peter Cottle bajo licencia MIT.</p><a href="https://github.com/pcottle/learnGitBranching" rel="noreferrer" target="_blank">Ver proyecto original ↗</a></div>
+    </aside>
+    <section className="challenge-main">
+      <header className="challenge-topbar"><a href="/ejercicios"><Logo /></a><div><span>NIVEL {active.number}</span><strong>{active.title}</strong></div><button onClick={reset} type="button"><Icon name="refresh" size={15} />Reiniciar</button></header>
+      <div className="challenge-workspace">
+        <section className="challenge-objective">
+          <div className="challenge-tags"><span>{active.world}</span><span>{active.difficulty}</span><span>{active.duration}</span></div>
+          <h1>{active.title}.</h1><p>{active.story}</p>
+          <article><span>OBJETIVO</span><strong>{active.objective}</strong></article>
+          <article className="mental-model"><span>MODELO MENTAL</span><p>{active.mentalModel}</p></article>
+          <div className="challenge-steps">{active.steps.map((step, index) => <div className={index < session.currentStep || session.completed ? 'done' : index === session.currentStep ? 'current' : ''} key={`${step.matcher}-${index}`}><span>{index < session.currentStep || session.completed ? <Icon name="check" size={13} /> : index + 1}</span><p>{step.instruction}</p></div>)}</div>
+        </section>
+        <section className="challenge-simulator">
+          <div className="challenge-graph-head"><span><i /> GRAFO EN VIVO</span><code>HEAD → {session.head.ref}</code></div>
+          <GraphBoard state={session} />
+          <div className="challenge-terminal">
+            <header><span><i /><i /><i />gitpath / {active.id}</span><small>{session.attempts} {session.attempts === 1 ? 'intento' : 'intentos'}</small></header>
+            <div className="challenge-transcript" aria-live="polite">{session.transcript.slice(-5).map((line, index) => <div className={line.type} key={`${line.type}-${index}`}>{line.type === 'command' && <b>$ </b>}{line.text}</div>)}</div>
+            <form onSubmit={execute}><b>$</b><input aria-label="Comando de Git para el nivel" autoCapitalize="none" autoComplete="off" disabled={session.completed} onChange={(event) => setCommand(event.target.value)} placeholder={session.completed ? 'Nivel completado' : 'escribe un comando de Git…'} spellCheck={false} value={command} /><button disabled={session.completed} type="submit">Ejecutar <Icon name="arrow" size={15} /></button></form>
           </div>
-          <div className={`lab-feedback ${session.feedback.tone}`}><span>{session.feedback.tone === 'success' ? <Icon name="check" size={17} /> : <Icon name="spark" size={17} />}</span><p>{session.feedback.text}</p>{suggested && <button onClick={() => setCommand(suggested)} type="button">Usar pista: <code>{suggested}</code></button>}</div>
+          <div className={`challenge-feedback ${session.feedback.tone}`}><span>{session.feedback.tone === 'success' ? <Icon name="check" size={17} /> : <Icon name="spark" size={17} />}</span><div><small>{session.feedback.tone === 'success' ? 'NIVEL COMPLETADO' : session.feedback.tone === 'error' ? 'PISTA' : 'QUÉ ESTÁ PASANDO'}</small><p>{session.feedback.text}</p></div>{currentStep && !session.completed ? <button onClick={() => setCommand(currentStep.example)} type="button"><span>Usar ejemplo</span><code>{currentStep.example}</code></button> : nextChallenge ? <button onClick={() => choose(nextChallenge)} type="button">Siguiente nivel <Icon name="arrow" size={15} /></button> : <a href="/progreso">Ver mi progreso <Icon name="arrow" size={15} /></a>}</div>
         </section>
       </div>
-    </div>
-  )
+    </section>
+  </div>
 }
 
-const relatedSlides: Record<string, string> = {
-  'first-commit': 'staging',
-  'safe-branch': 'ramas',
-  'revert-release': 'deshacer',
-  'resolve-conflict': 'grafo',
-  'recover-reflog': 'reflog',
-}
-
-function LessonGuidePage({ lesson, completed }: { lesson: Lesson; completed: boolean }) {
-  const relatedSlide = courseSlides.find((slide) => slide.id === relatedSlides[lesson.id]) ?? courseSlides[0]
-  return (
-    <div className="guide-page page-width">
-      <header className="guide-hero"><div><span className="eyebrow">GUÍA {lesson.number} · {lesson.category.toUpperCase()}</span><h1>{lesson.title}.</h1><p>{lesson.detail}</p><div><a className="button primary" href={labHref(lesson.id)}><Icon name="terminal" size={18} />Practicar misión</a><a className="button quiet" href={courseHref(relatedSlide.id)}>Ver modelo visual <Icon name="arrow" size={18} /></a></div></div><div className="guide-visual"><CourseVisual kind={relatedSlide.visual} compact /></div></header>
-      <section className="guide-content"><article><span className="eyebrow">EL ESCENARIO</span><h2>{lesson.scenario}</h2><p><strong>Tu objetivo:</strong> {lesson.objective}</p><div>{lesson.concepts.map((concept) => <span key={concept}>{concept}</span>)}</div></article><article><span className="eyebrow">PASO A PASO</span>{lesson.steps.map((step, index) => <div className="guide-step" key={step.command}><span>{String(index + 1).padStart(2, '0')}</span><div><code>$ {step.command}</code><p>{step.hint}</p></div></div>)}<p className={completed ? 'guide-status done' : 'guide-status'}>{completed ? '✓ Misión completada' : `${lesson.duration} · lista para practicar`}</p></article></section>
-    </div>
-  )
-}
-
-function ProgressPage({ viewedSlides, completedLessons, onReset }: { viewedSlides: string[]; completedLessons: string[]; onReset: () => void }) {
+function ProgressPage({ viewedSlides, completedChallenges, setupProgress, onReset }: { viewedSlides: string[]; completedChallenges: string[]; setupProgress: string[]; onReset: () => void }) {
+  const setupPercent = Math.round((setupProgress.length / SETUP_STEP_IDS.length) * 100)
   const coursePercent = Math.round((viewedSlides.length / courseSlides.length) * 100)
-  const labPercent = Math.round((completedLessons.length / lessons.length) * 100)
-  return (
-    <div className="progress-page page-width">
-      <header><span className="eyebrow">MI PROGRESO</span><h1>Aprender sin prisa también cuenta.</h1><p>Todo se guarda únicamente en este navegador. Puedes continuar, repasar una escena o volver a empezar.</p></header>
-      <section className="progress-cards">
-        <article><div className="big-progress"><strong>{coursePercent}%</strong><span>curso visual</span></div><div><span>APRENDER</span><h2>{viewedSlides.length} de {courseSlides.length} escenas vistas</h2><div className="bar"><i style={{ width: `${coursePercent}%` }} /></div><a href={courseHref(courseSlides.find((slide) => !viewedSlides.includes(slide.id))?.id ?? 'modelo-mental')}>Continuar curso <Icon name="arrow" size={17} /></a></div></article>
-        <article><div className="big-progress practice"><strong>{labPercent}%</strong><span>laboratorio</span></div><div><span>PRACTICAR</span><h2>{completedLessons.length} de {lessons.length} misiones resueltas</h2><div className="bar"><i style={{ width: `${labPercent}%` }} /></div><a href={labHref(lessons.find((lesson) => !completedLessons.includes(lesson.id))?.id)}>Abrir laboratorio <Icon name="arrow" size={17} /></a></div></article>
-      </section>
-      <section className="progress-detail"><div className="section-title"><div><span className="eyebrow">ESCENAS</span><h2>Tu mapa de aprendizaje.</h2></div><button onClick={onReset} type="button"><Icon name="refresh" size={15} />Reiniciar todo</button></div><div>{courseSlides.map((slide, index) => <a className={viewedSlides.includes(slide.id) ? 'seen' : ''} href={courseHref(slide.id)} key={slide.id}><span>{viewedSlides.includes(slide.id) ? <Icon name="check" size={15} /> : String(index + 1).padStart(2, '0')}</span><div><small>{slide.chapter}</small><strong>{slide.title}</strong></div><Icon name="arrow" size={16} /></a>)}</div></section>
-    </div>
-  )
+  const labPercent = Math.round((completedChallenges.length / challenges.length) * 100)
+  return <div className="progress-page page-width">
+    <header><span className="eyebrow">MI PROGRESO</span><h1>Tu mapa,<br />paso a paso.</h1><p>La preparación, las escenas y los niveles se guardan únicamente en este navegador.</p></header>
+    <section className="progress-cards progress-cards-three">
+      <article><div className="big-progress setup"><strong>{setupPercent}%</strong><span>preparación</span></div><div><span>INSTALAR</span><h2>{setupProgress.length} de {SETUP_STEP_IDS.length} checks</h2><div className="bar"><i style={{ width: `${setupPercent}%` }} /></div><a href={setupProgress.filter((id) => id.startsWith('git-')).length < 3 ? '/instalar' : '/github-desktop'}>Continuar preparación <Icon name="arrow" size={17} /></a></div></article>
+      <article><div className="big-progress"><strong>{coursePercent}%</strong><span>curso visual</span></div><div><span>ENTENDER</span><h2>{viewedSlides.length} de {courseSlides.length} escenas</h2><div className="bar"><i style={{ width: `${coursePercent}%` }} /></div><a href={courseHref(courseSlides.find((slide) => !viewedSlides.includes(slide.id))?.id ?? 'modelo-mental')}>Continuar curso <Icon name="arrow" size={17} /></a></div></article>
+      <article><div className="big-progress practice"><strong>{labPercent}%</strong><span>ejercicios</span></div><div><span>PRACTICAR</span><h2>{completedChallenges.length} de {challenges.length} niveles</h2><div className="bar"><i style={{ width: `${labPercent}%` }} /></div><a href={labHref(challenges.find((challenge) => !completedChallenges.includes(challenge.id))?.id)}>Abrir ejercicios <Icon name="arrow" size={17} /></a></div></article>
+    </section>
+    <section className="progress-detail"><div className="section-title"><div><span className="eyebrow">CURSO VISUAL</span><h2>Tu mapa de conceptos.</h2></div><button onClick={onReset} type="button"><Icon name="refresh" size={15} />Reiniciar todo</button></div><div>{courseSlides.map((slide, index) => <a className={viewedSlides.includes(slide.id) ? 'seen' : ''} href={courseHref(slide.id)} key={slide.id}><span>{viewedSlides.includes(slide.id) ? <Icon name="check" size={15} /> : String(index + 1).padStart(2, '0')}</span><div><small>{slide.chapter}</small><strong>{slide.title}</strong></div><Icon name="arrow" size={16} /></a>)}</div></section>
+  </div>
 }
 
 function NotFoundPage() {
@@ -470,39 +548,48 @@ function NotFoundPage() {
 function App() {
   const path = currentPath()
   const slideIds = new Set(courseSlides.map((slide) => slide.id))
-  const lessonIds = new Set(lessons.map((lesson) => lesson.id))
+  const challengeIds = new Set(challenges.map((challenge) => challenge.id))
+  const setupIds = new Set<string>(SETUP_STEP_IDS)
   const [viewedSlides, setViewedSlides] = useState<string[]>(() => readStoredList(COURSE_PROGRESS_KEY, slideIds))
-  const [completedLessons, setCompletedLessons] = useState<string[]>(() => readStoredList(PRACTICE_PROGRESS_KEY, lessonIds))
+  const [completedChallenges, setCompletedChallenges] = useState<string[]>(() => readStoredList(PRACTICE_PROGRESS_KEY, challengeIds))
+  const [setupProgress, setSetupProgress] = useState<string[]>(() => readStoredList(SETUP_PROGRESS_KEY, setupIds))
 
   useEffect(() => window.localStorage.setItem(COURSE_PROGRESS_KEY, JSON.stringify(viewedSlides)), [viewedSlides])
-  useEffect(() => window.localStorage.setItem(PRACTICE_PROGRESS_KEY, JSON.stringify(completedLessons)), [completedLessons])
+  useEffect(() => window.localStorage.setItem(PRACTICE_PROGRESS_KEY, JSON.stringify(completedChallenges)), [completedChallenges])
+  useEffect(() => window.localStorage.setItem(SETUP_PROGRESS_KEY, JSON.stringify(setupProgress)), [setupProgress])
 
   const markViewed = (slideId: string) => setViewedSlides((current) => current.includes(slideId) ? current : [...current, slideId])
-  const markCompleted = (lessonId: string) => setCompletedLessons((current) => current.includes(lessonId) ? current : [...current, lessonId])
+  const markCompleted = (challengeId: string) => setCompletedChallenges((current) => current.includes(challengeId) ? current : [...current, challengeId])
+  const toggleSetup = (stepId: SetupStepId) => setSetupProgress((current) => current.includes(stepId) ? current.filter((id) => id !== stepId) : [...current, stepId])
   const resetProgress = () => {
-    if (window.confirm('¿Quieres reiniciar el curso y las misiones guardadas en este navegador?')) {
+    if (window.confirm('¿Quieres reiniciar toda la ruta guardada en este navegador?')) {
       setViewedSlides([])
-      setCompletedLessons([])
+      setCompletedChallenges([])
+      setSetupProgress([])
     }
   }
 
-  const lesson = path.startsWith('/ruta/') ? lessons.find((item) => item.id === path.slice('/ruta/'.length)) : undefined
   let page: ReactNode
   let minimal = false
 
-  if (path === '/') page = <HomePage completedLessons={completedLessons} viewedSlides={viewedSlides} />
+  if (path === '/') page = <HomePage completedChallenges={completedChallenges} setupProgress={setupProgress} viewedSlides={viewedSlides} />
+  else if (path === '/instalar') page = <InstallationPage completed={setupProgress} onToggle={toggleSetup} />
+  else if (path === '/github-desktop') page = <GitHubDesktopPage completed={setupProgress} onToggle={toggleSetup} />
   else if (path === '/aprender' || path === '/fundamentos') {
     page = <CoursePage initialSlideId={path === '/fundamentos' ? 'commit' : undefined} onView={markViewed} viewedSlides={viewedSlides} />
     minimal = true
   } else if (path === '/ramas-y-prs') {
     page = <CoursePage initialSlideId="ramas" onView={markViewed} viewedSlides={viewedSlides} />
     minimal = true
-  } else if (path === '/laboratorio') page = <LabPage completedLessons={completedLessons} onComplete={markCompleted} />
-  else if (path === '/progreso') page = <ProgressPage completedLessons={completedLessons} onReset={resetProgress} viewedSlides={viewedSlides} />
-  else if (lesson) page = <LessonGuidePage completed={completedLessons.includes(lesson.id)} lesson={lesson} />
+  } else if (path === '/ejercicios' || path === '/laboratorio') {
+    page = <ChallengeLabPage completedChallenges={completedChallenges} onComplete={markCompleted} />
+    minimal = true
+  } else if (path === '/progreso') page = <ProgressPage completedChallenges={completedChallenges} onReset={resetProgress} setupProgress={setupProgress} viewedSlides={viewedSlides} />
   else page = <NotFoundPage />
 
-  return <AppShell learnedCount={viewedSlides.length} minimal={minimal} path={path}>{page}</AppShell>
+  const learnedCount = viewedSlides.length + completedChallenges.length + setupProgress.length
+  const totalCount = courseSlides.length + challenges.length + SETUP_STEP_IDS.length
+  return <AppShell learnedCount={learnedCount} minimal={minimal} path={path} totalCount={totalCount}>{page}</AppShell>
 }
 
 export default App

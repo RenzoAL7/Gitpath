@@ -1,47 +1,52 @@
 # GitPath
 
-GitPath es una experiencia educativa visual para entender Git antes de memorizar comandos. El curso explica commits, grafos, ramas, `HEAD`, staging, `rebase` y `reflog` como una presentación breve; después ofrece un laboratorio opcional con situaciones que aparecen en un equipo real.
+GitPath es una ruta visual en español para aprender Git desde cero. Empieza antes del primer comando —instalación en Windows, macOS o Linux—, explica para qué sirve GitHub Desktop, construye el modelo mental de Git con escenas y termina en un laboratorio donde cada comando mueve un grafo de commits en tiempo real.
 
-La inspiración conceptual es [Learn Git Branching](https://github.com/pcottle/learnGitBranching), pero el enfoque de GitPath está orientado a la toma de decisiones: cada comando aparece dentro de un incidente, muestra su efecto y explica el riesgo de usarlo mal.
+## Recorrido
 
-## Qué existe hoy
+| Etapa | Ruta | Qué aprende la persona |
+| --- | --- | --- |
+| 1. Preparar | `/instalar` | Cómo instalar y comprobar Git según su sistema, y cómo configurar nombre y correo. |
+| 2. Usar una interfaz | `/github-desktop` | Para qué sirve GitHub Desktop y cómo se relacionan Changes, Commit, Push, Pull y Branch. |
+| 3. Entender | `/aprender` | Commits, grafos, ramas, `HEAD`, staging, recuperación, rebase y reflog mediante nueve escenas. |
+| 4. Practicar | `/ejercicios` | Cinco niveles básicos con commits, ramas, merge, `HEAD` separado y rebase. |
+| Progreso | `/progreso` | Checks de preparación, escenas vistas y niveles completados, guardados localmente. |
 
-- Curso visual de nueve escenas, navegable con botones, indicadores o las flechas del teclado.
-- Cuatro capítulos inspirados en el modelo interno de Git: objetos, punteros, selección de cambios y recuperación.
-- Laboratorio independiente con cinco escenarios, comandos guiados, transcript de terminal y visualización del repositorio.
-- Estado simulado para ramas, `HEAD`, staging, conflictos y commits.
-- Feedback contextual cuando el comando no resuelve el paso actual.
-- Progreso separado para el curso y las prácticas, persistido localmente con `localStorage`.
-- Casos de fallo con síntoma, riesgo y comando de rescate.
-- Build reproducible con Docker, Nginx, GitHub Actions, GHCR y promoción GitOps hacia K3s.
-- Suite de comportamiento con Node test runner para validar el orden y el resultado de los comandos.
+Las páginas de instalación enlazan a las fuentes oficiales de [Git](https://git-scm.com/install/) y [GitHub Desktop](https://docs.github.com/es/desktop/installing-and-authenticating-to-github-desktop/installing-github-desktop). GitHub Desktop se presenta como aplicación oficialmente disponible para Windows y macOS; en Linux se recomienda continuar con Git en terminal o una interfaz alternativa.
 
-## Arquitectura actual
+## Laboratorio visual
+
+El laboratorio no toca repositorios reales. Su motor determinista interpreta un conjunto acotado de comandos, actualiza ramas y `HEAD`, crea commits con sus padres y dibuja el resultado:
+
+- `git commit -m "…"`
+- `git branch <nombre>`
+- `git switch <rama>`
+- `git merge <rama>`
+- `git switch --detach <commit>`
+- `git rebase <rama>`
+
+Cada nivel incluye un objetivo, un modelo mental, pasos, transcript, pistas y reinicio. El nivel de rebase conserva los commits anteriores atenuados y dibuja las copias con hashes nuevos para que la reescritura sea visible.
+
+La estructura por niveles está inspirada en [Learn Git Branching](https://github.com/pcottle/learnGitBranching), de Peter Cottle, publicado bajo licencia MIT. GitPath implementa su propio contenido, motor y sistema visual; la atribución está documentada en [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+## Arquitectura
 
 ```text
 React + TypeScript + Vite
-  ├── src/data/course.ts        contenido del curso visual
-  ├── src/data/lessons.ts       catálogo de prácticas
-  ├── src/lib/git-simulator.ts  motor determinista de prácticas
-  ├── src/App.tsx               navegación, laboratorio y progreso
-  └── src/index.css             sistema visual responsive
+  ├── src/data/course.ts                 escenas conceptuales
+  ├── src/data/challenges.ts             mundos y niveles del laboratorio
+  ├── src/lib/challenge-simulator.ts     motor determinista del grafo
+  ├── src/components/GraphBoard.tsx      visualización de commits y punteros
+  ├── src/App.tsx                        rutas, onboarding, curso y progreso
+  └── src/index.css                      sistema visual responsive
 
 CI/CD
   GitHub Actions → imagen multi-arquitectura en GHCR
-                → PR de promoción y merge automático en K3s-Cortex
-                → Argo CD → rolling update en K3s
+                 → promoción y merge automático en K3s-Cortex
+                 → Argo CD → rolling update en K3s
 ```
 
-El simulador es deliberadamente determinista y local en esta primera etapa. Eso permite practicar sin credenciales, sin riesgo para repositorios reales y sin depender de una API durante la lección.
-
-## Cómo se usa la ruta
-
-1. Empieza en **Curso visual** y avanza por una idea a la vez. Cada escena combina una explicación corta con un modelo gráfico.
-2. Cuando quieras probar lo aprendido, abre el **Laboratorio**, elige un escenario y escribe el comando que creas correcto.
-3. Si te bloqueas, puedes usar el comando sugerido como punto de partida y modificarlo antes de ejecutarlo. No sustituye la explicación ni completa la misión por ti.
-4. Las escenas vistas y las misiones completadas se guardan únicamente en `localStorage`. Puedes retomar ambas rutas desde Inicio o Progreso.
-
-La navegación mantiene las rutas visibles también en móvil, de modo que se puede cambiar de contexto sin perder la práctica actual.
+El progreso usa `localStorage`; no requiere cuenta ni envía datos a un servidor.
 
 ## Desarrollo local
 
@@ -50,28 +55,15 @@ npm ci
 npm run dev
 ```
 
-Para validar el build de producción:
+Validación completa:
 
 ```bash
+npm test
 npm run build
 ```
 
-## CI/CD
+Los tests comprueban que una rama nueva no mueva `main`, que merge cree un commit con dos padres y que rebase reproduzca los commits con identificadores nuevos.
 
-Cada pull request hacia `main` instala las dependencias, ejecuta el audit de producción, los tests del simulador y valida el build de frontend y la imagen Docker.
+## Entrega automática
 
-Al hacer merge a `main`, GitHub Actions publica una imagen multi-arquitectura (`amd64` y `arm64`) en GHCR con un tag inmutable basado en el SHA del commit. Después abre o actualiza el PR de promoción en `K3s-Cortex`, verifica su commit exacto y lo fusiona automáticamente. Argo CD detecta el cambio y ejecuta el rolling update sin comandos manuales sobre el Deployment.
-
-## Roadmap
-
-1. Añadir tests del motor de comandos y un modo de evaluación con comandos alternativos.
-2. Separar contenido, motor y UI para poder publicar nuevas rutas sin tocar el frontend.
-3. Servir el catálogo versionado desde OCI Object Storage y mantener fallback local.
-4. Añadir autenticación opcional y sincronización de progreso mediante una API.
-5. Incorporar accesibilidad, telemetría anónima y métricas de aprendizaje: tasa de finalización, intentos y errores por escenario.
-
-La estrategia para OCI está documentada en [`docs/oci-storage-plan.md`](docs/oci-storage-plan.md).
-
-## Cómo presentarlo en el CV
-
-> Construí GitPath, una plataforma interactiva de aprendizaje de Git con simulación determinista de ramas, staging, conflictos y recuperación con `reflog`; automatizé su entrega multi-arquitectura con GitHub Actions, GHCR, GitOps, Argo CD y K3s sobre OCI.
+Cada pull request hacia `main` instala dependencias, ejecuta el audit de producción, las pruebas y el build. Un push a `main` publica la imagen `amd64`/`arm64` en GHCR, actualiza el repositorio GitOps `K3s-Cortex`, fusiona la promoción y deja que Argo CD actualice los pods de K3s.
