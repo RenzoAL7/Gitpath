@@ -41,6 +41,9 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
       - name: Build frontend
+        env:
+          VITE_SUPABASE_URL: https://dikckiooelpyqezzjvgi.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_C-kci7h-1BnyhnUmOBYI_g_NxGFznnf
         run: npm run build
 
       - name: Test simulator behavior
@@ -86,6 +89,9 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          build-args: |
+            VITE_SUPABASE_URL=https://dikckiooelpyqezzjvgi.supabase.co
+            VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_C-kci7h-1BnyhnUmOBYI_g_NxGFznnf
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}

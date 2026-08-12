@@ -112,8 +112,8 @@ export const courseSlides: CourseSlide[] = [
     chapter: 'Volver sin pánico',
     chapterNumber: '04',
     eyebrow: 'NO HAY UN SOLO “UNDO”',
-    title: 'Deshacer es una decisión.',
-    accent: 'Elige qué quieres conservar.',
+    title: 'Deshacer cambia según el caso.',
+    accent: 'Archivo, puntero o historia.',
     summary:
       'Restore toca archivos, reset mueve punteros y revert crea un commit nuevo. Se parecen desde fuera, pero afectan lugares distintos; por eso copiar un comando al azar puede salir caro.',
     takeaway: 'Pregunta primero: ¿archivo, puntero o historia compartida?',

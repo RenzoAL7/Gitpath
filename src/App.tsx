@@ -1,8 +1,13 @@
-import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
+import type { IconType } from 'react-icons'
+import { FaApple, FaLinux, FaWindows } from 'react-icons/fa'
+import { FiArrowLeft, FiArrowRight, FiBookOpen, FiCheck, FiCode, FiGitBranch, FiGitCommit, FiLayers, FiLogOut, FiPlay, FiRefreshCw, FiShield, FiStar, FiTerminal, FiUser } from 'react-icons/fi'
 import { GraphBoard } from './components/GraphBoard'
 import { challenges, challengeWorlds, type Challenge } from './data/challenges'
 import { courseChapters, courseSlides, type VisualKind } from './data/course'
 import { createChallengeSession, runChallengeCommand, type ChallengeState } from './lib/challenge-simulator'
+import { isSupabaseConfigured, supabase } from './lib/supabase'
 
 const PRACTICE_PROGRESS_KEY = 'gitpath:completed-challenges:v1'
 const COURSE_PROGRESS_KEY = 'gitpath:viewed-slides:v1'
@@ -27,35 +32,29 @@ type IconName =
   | 'terminal'
 
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 1.9,
-    strokeLinecap: 'round' as const,
-    strokeLinejoin: 'round' as const,
-    'aria-hidden': true,
+  const icons: Record<IconName, IconType> = {
+    arrow: FiArrowRight,
+    arrowLeft: FiArrowLeft,
+    book: FiBookOpen,
+    branch: FiGitBranch,
+    check: FiCheck,
+    code: FiCode,
+    commit: FiGitCommit,
+    layers: FiLayers,
+    play: FiPlay,
+    refresh: FiRefreshCw,
+    shield: FiShield,
+    spark: FiStar,
+    terminal: FiTerminal,
   }
+  const Component = icons[name]
+  return <Component aria-hidden="true" size={size} />
+}
 
-  const paths: Record<IconName, ReactNode> = {
-    arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
-    arrowLeft: <path d="M19 12H5m6 6-6-6 6-6" />,
-    book: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z" /></>,
-    branch: <><circle cx="6" cy="5" r="2" /><circle cx="18" cy="19" r="2" /><circle cx="6" cy="19" r="2" /><path d="M6 7v10M8 19h7a3 3 0 0 0 3-3V7" /></>,
-    check: <path d="m5 12 4.2 4.2L19 6.5" />,
-    code: <><path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.5 5l-3 14" /></>,
-    commit: <><path d="M3 12h6m6 0h6" /><circle cx="12" cy="12" r="3" /></>,
-    layers: <><path d="m12 3-9 5 9 5 9-5-9-5Z" /><path d="m3 12 9 5 9-5M3 16l9 5 9-5" /></>,
-    play: <path d="m8 5 11 7-11 7V5Z" />,
-    refresh: <><path d="M20 7v5h-5" /><path d="M4 17v-5h5" /><path d="M6.1 8a7 7 0 0 1 11.8-1L20 12M4 12l2.1 5A7 7 0 0 0 18 16" /></>,
-    shield: <><path d="M12 3 19 6v5c0 4.3-2.7 7.8-7 10-4.3-2.2-7-5.7-7-10V6l7-3Z" /><path d="m8.7 12 2.1 2.1 4.5-4.5" /></>,
-    spark: <><path d="m12 3 1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3Z" /><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" /></>,
-    terminal: <><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="m7 9 3 3-3 3m6 0h4" /></>,
-  }
-
-  return <svg {...common}>{paths[name]}</svg>
+function PlatformIcon({ os }: { os: OperatingSystem }) {
+  const icons: Record<OperatingSystem, IconType> = { windows: FaWindows, mac: FaApple, linux: FaLinux }
+  const Component = icons[os]
+  return <Component aria-hidden="true" className={`platform-icon platform-icon-${os}`} />
 }
 
 function Logo() {
@@ -95,10 +94,11 @@ function readStoredList(key: string, allowed: Set<string>) {
   }
 }
 
-function Navigation({ path, learnedCount, totalCount }: { path: string; learnedCount: number; totalCount: number }) {
+function Navigation({ path, user, onOpenAuth, onSignOut }: { path: string; user: User | null; onOpenAuth: (mode: AuthMode) => void; onSignOut: () => void }) {
   const items = [
     { href: '/instalar', label: 'Instalar', match: ['/instalar'] },
     { href: '/github-desktop', label: 'GitHub Desktop', match: ['/github-desktop'] },
+    { href: '/commits', label: 'Commits', match: ['/commits'] },
     { href: '/aprender', label: 'Entender Git', match: ['/aprender', '/fundamentos', '/ramas-y-prs'] },
     { href: '/ejercicios', label: 'Ejercicios', match: ['/ejercicios', '/laboratorio'] },
   ]
@@ -113,19 +113,18 @@ function Navigation({ path, learnedCount, totalCount }: { path: string; learnedC
             return <a aria-current={active ? 'page' : undefined} className={active ? 'active' : ''} href={item.href} key={item.href}>{item.label}</a>
           })}
         </div>
-        <a className="nav-progress" href="/progreso" aria-label={`${learnedCount} de ${totalCount} pasos completados`}>
-          <span className="progress-ring" style={{ '--progress': `${Math.round((learnedCount / totalCount) * 360)}deg` } as CSSProperties}><i /></span>
-          <span><strong>{Math.round((learnedCount / totalCount) * 100)}%</strong><small>ruta</small></span>
-        </a>
+        <div className="nav-account">
+          {user ? <><a className="account-chip" href="/progreso"><FiUser aria-hidden="true" /><span>{user.email}</span></a><button aria-label="Cerrar sesión" onClick={onSignOut} type="button"><FiLogOut aria-hidden="true" /></button></> : <><button className="login-button" onClick={() => onOpenAuth('login')} type="button">Iniciar sesión</button><button className="signup-button" onClick={() => onOpenAuth('signup')} type="button">Crear cuenta</button></>}
+        </div>
       </nav>
     </header>
   )
 }
 
-function AppShell({ children, path, learnedCount, totalCount, minimal = false }: { children: ReactNode; path: string; learnedCount: number; totalCount: number; minimal?: boolean }) {
+function AppShell({ children, path, user, onOpenAuth, onSignOut, minimal = false }: { children: ReactNode; path: string; user: User | null; onOpenAuth: (mode: AuthMode) => void; onSignOut: () => void; minimal?: boolean }) {
   return (
     <main>
-      <Navigation path={path} learnedCount={learnedCount} totalCount={totalCount} />
+      <Navigation onOpenAuth={onOpenAuth} onSignOut={onSignOut} path={path} user={user} />
       {children}
       {!minimal && (
         <footer className="footer page-width">
@@ -136,6 +135,74 @@ function AppShell({ children, path, learnedCount, totalCount, minimal = false }:
       )}
     </main>
   )
+}
+
+type AuthMode = 'login' | 'signup'
+
+function readableAuthError(message: string) {
+  const normalized = message.toLowerCase()
+  if (normalized.includes('invalid login credentials')) return 'El correo o la contraseña no coinciden.'
+  if (normalized.includes('email not confirmed')) return 'Confirma tu correo antes de iniciar sesión.'
+  if (normalized.includes('user already registered')) return 'Ese correo ya tiene una cuenta. Inicia sesión.'
+  if (normalized.includes('password should be')) return 'La contraseña debe tener al menos 6 caracteres.'
+  if (normalized.includes('rate limit')) return 'Hubo demasiados intentos. Espera un momento y vuelve a probar.'
+  return 'No pudimos completar la solicitud. Revisa los datos e inténtalo otra vez.'
+}
+
+function AuthDialog({ mode, onClose, onModeChange }: { mode: AuthMode; onClose: () => void; onModeChange: (mode: AuthMode) => void }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [pending, setPending] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => event.key === 'Escape' && onClose()
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [onClose])
+
+  useEffect(() => setMessage(''), [mode])
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setMessage('')
+    if (!supabase) {
+      setMessage('La autenticación no está configurada en este despliegue.')
+      return
+    }
+    setPending(true)
+    const result = mode === 'login'
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/` } })
+    setPending(false)
+    if (result.error) {
+      setMessage(readableAuthError(result.error.message))
+      return
+    }
+    if (mode === 'signup' && !result.data.session) {
+      setMessage('Revisa tu correo y confirma la cuenta para continuar.')
+      return
+    }
+    onClose()
+  }
+
+  return <div className="auth-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
+    <section aria-labelledby="auth-title" aria-modal="true" className="auth-dialog" role="dialog">
+      <button aria-label="Cerrar" className="auth-close" onClick={onClose} type="button">×</button>
+      <Logo />
+      <span className="eyebrow">TU CUENTA GITPATH</span>
+      <h2 id="auth-title">{mode === 'login' ? 'Inicia sesión.' : 'Crea tu cuenta.'}</h2>
+      <p>{mode === 'login' ? 'Accede con el correo que registraste.' : 'Regístrate con correo y contraseña.'}</p>
+      <form onSubmit={submit}>
+        <label>Correo<input autoComplete="email" autoFocus onChange={(event) => setEmail(event.target.value)} required type="email" value={email} /></label>
+        <label>Contraseña<input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} /></label>
+        {message && <div aria-live="polite" className="auth-message">{message}</div>}
+        <button className="button primary" disabled={pending || !isSupabaseConfigured} type="submit">{pending ? 'Procesando…' : mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</button>
+      </form>
+      <button className="auth-switch" onClick={() => onModeChange(mode === 'login' ? 'signup' : 'login')} type="button">{mode === 'login' ? '¿No tienes cuenta? Crear cuenta' : '¿Ya tienes cuenta? Iniciar sesión'}</button>
+      <small>Autenticación protegida por Supabase.</small>
+    </section>
+  </div>
 }
 
 function CourseVisual({ kind, compact = false }: { kind: VisualKind; compact?: boolean }) {
@@ -262,7 +329,7 @@ function HomePage({ viewedSlides, completedChallenges, setupProgress }: { viewed
             <a className="button primary" href={nextHref}><Icon name="play" size={18} />{hasProgress ? 'Continuar mi ruta' : 'Empezar desde cero'}</a>
             <a className="button quiet" href="/ejercicios">Ver ejercicios <Icon name="arrow" size={18} /></a>
           </div>
-          <div className="hero-proof"><span><Icon name="check" size={15} /> En español</span><span><Icon name="check" size={15} /> Sin registro</span><span><Icon name="check" size={15} /> Progreso local</span></div>
+          <div className="hero-proof"><span><Icon name="check" size={15} /> En español</span><span><Icon name="check" size={15} /> Cuenta opcional</span><span><Icon name="check" size={15} /> Progreso local</span></div>
         </div>
         <div className="journey-map" aria-label="Ruta de aprendizaje de Git">
           <div className="journey-map-head"><span>TU MAPA</span><small>DE CERO A TU PRIMER MERGE</small></div>
@@ -355,7 +422,7 @@ function InstallationPage({ completed, onToggle }: { completed: string[]; onTogg
       <section className="install-panel page-width">
         <div className="install-panel-head"><div><span className="eyebrow">ELIGE TU SISTEMA</span><h2>Instrucciones para tu computadora.</h2></div><span>Detectamos <strong>{installationData[detected].label}</strong>. Puedes cambiarlo.</span></div>
         <div className="os-tabs" role="tablist" aria-label="Sistema operativo">
-          {(Object.keys(installationData) as OperatingSystem[]).map((key) => <button aria-selected={os === key} className={os === key ? 'active' : ''} onClick={() => setOs(key)} role="tab" type="button" key={key}><span className={`os-symbol os-${key}`} aria-hidden="true" />{installationData[key].label}<small>{installationData[key].note}</small></button>)}
+          {(Object.keys(installationData) as OperatingSystem[]).map((key) => <button aria-selected={os === key} className={os === key ? 'active' : ''} onClick={() => setOs(key)} role="tab" type="button" key={key}><PlatformIcon os={key} />{installationData[key].label}<small>{installationData[key].note}</small></button>)}
         </div>
         <div className="install-content" key={os}>
           <aside><span>RECOMENDADO</span><h3>{data.recommended}</h3><p>Usa una sola opción. No necesitas instalar Git dos veces.</p><a href={os === 'windows' ? 'https://git-scm.com/install/windows' : os === 'mac' ? 'https://git-scm.com/install/mac' : 'https://git-scm.com/install/linux'} rel="noreferrer" target="_blank">Abrir guía oficial <Icon name="arrow" size={15} /></a></aside>
@@ -374,10 +441,6 @@ function InstallationPage({ completed, onToggle }: { completed: string[]; onTogg
   )
 }
 
-function DesktopMockup() {
-  return <div aria-hidden="true" className="desktop-mockup"><header><i /><i /><i /><span>GitPath — GitHub Desktop</span></header><div className="desktop-toolbar"><strong>Current repository <b>GitPath⌄</b></strong><strong>Current branch <b>main⌄</b></strong><span className="desktop-fetch">Fetch origin</span></div><div className="desktop-body"><aside><span>3 changed files</span><p className="selected"><i /> App.tsx <b>+24 −3</b></p><p><i /> index.css <b>+18</b></p><p><i /> README.md <b>+4</b></p><div className="desktop-commit"><strong>Explica la instalación</strong><p>Añade la ruta inicial para nuevos usuarios.</p><span>Commit to main</span></div></aside><section><div className="desktop-file-head"><span>src/App.tsx</span><small>24 additions, 3 deletions</small></div><pre><b>+ </b>function InstallationPage() {'{'}{`\n`}<b>+   </b>return &lt;Guide platform="mac" /&gt;{`\n`}<b>+ </b>{'}'}{`\n`}  export default App</pre></section></div><div className="desktop-callout callout-repo">1 <span>Repositorio actual</span></div><div className="desktop-callout callout-branch">2 <span>Rama actual</span></div><div className="desktop-callout callout-sync">3 <span>Pull / Push</span></div><div className="desktop-callout callout-files">4 <span>Archivos cambiados</span></div><div className="desktop-callout callout-commit">5 <span>Crear commit</span></div></div>
-}
-
 function GitHubDesktopPage({ completed, onToggle }: { completed: string[]; onToggle: (id: SetupStepId) => void }) {
   const desktopSteps: { id: SetupStepId; title: string; text: string }[] = [
     { id: 'desktop-install', title: 'Instala la aplicación', text: 'Disponible oficialmente para Windows 10 de 64 bits o posterior y macOS 12 o posterior.' },
@@ -385,14 +448,69 @@ function GitHubDesktopPage({ completed, onToggle }: { completed: string[]; onTog
     { id: 'desktop-clone', title: 'Clona tu primer repositorio', text: 'File → Clone repository descarga una copia de GitHub a tu computadora.' },
   ]
   return <div className="desktop-page">
-    <section className="desktop-hero page-width"><div><span className="eyebrow">PASO 02 · TU MAPA VISUAL</span><h1>GitHub Desktop,<br /><em>sin misterio.</em></h1><p>Es una interfaz para usar Git: ves qué archivos cambiaron, eliges qué guardar, creas commits y sincronizas con GitHub.</p><div className="hero-actions"><a className="button primary" href="https://desktop.github.com/download/" rel="noreferrer" target="_blank">Descargar GitHub Desktop <Icon name="arrow" size={18} /></a><a className="button quiet" href="#como-funciona">Ver cómo funciona</a></div><small>GitHub Desktop no reemplaza Git: lo controla con una interfaz gráfica.</small></div><DesktopMockup /></section>
-    <section className="desktop-purpose page-width" id="como-funciona"><div className="section-title"><div><span className="eyebrow">PARA QUÉ SIRVE</span><h2>De tus archivos a GitHub, en cinco movimientos.</h2></div><p>La interfaz cambia, pero el modelo mental es el mismo que aprenderás en el curso.</p></div><div className="purpose-flow">{[
-      ['01', 'Editas', 'Cambias archivos en tu editor.'], ['02', 'Revisas', 'Desktop muestra el diff.'], ['03', 'Commit', 'Guardas una fotografía local.'], ['04', 'Push', 'Subes commits a GitHub.'], ['05', 'Pull', 'Traes el trabajo del equipo.'],
-    ].map(([number, title, text], index) => <article key={number}><span>{number}</span><div className={`purpose-icon purpose-${index}`}><Icon name={(['code', 'book', 'commit', 'arrow', 'refresh'] as IconName[])[index]} size={21} /></div><strong>{title}</strong><p>{text}</p></article>)}</div></section>
-    <section className="desktop-install page-width"><div className="desktop-install-copy"><span className="eyebrow">INSTALACIÓN GUIADA</span><h2>Tres pasos para quedar listo.</h2><p>La descarga oficial detecta Windows o macOS. En Linux, GitHub Desktop todavía no tiene soporte oficial; puedes usar Git en terminal o una interfaz alternativa.</p><a href="https://docs.github.com/es/desktop/installing-and-authenticating-to-github-desktop/installing-github-desktop" rel="noreferrer" target="_blank">Leer documentación oficial <Icon name="arrow" size={15} /></a></div><div className="desktop-install-right"><div className="desktop-platforms"><article><span className="os-symbol os-windows" /><div><strong>Windows</strong><p>Descarga el archivo de instalación, ábrelo y espera a que Desktop inicie.</p><small>Windows 10 de 64 bits o posterior</small></div></article><article><span className="os-symbol os-mac" /><div><strong>macOS</strong><p>Abre el ZIP descargado y después la aplicación GitHub Desktop.</p><small>macOS 12 o posterior</small></div></article><article><span className="os-symbol os-linux" /><div><strong>Linux</strong><p>No existe una versión oficial. GitPath funciona sin instalar Desktop.</p><small>Continúa con Git en terminal</small></div></article></div><div className="desktop-checklist">{desktopSteps.map((step, index) => <button className={completed.includes(step.id) ? 'done' : ''} onClick={() => onToggle(step.id)} type="button" key={step.id}><span>{completed.includes(step.id) ? <Icon name="check" size={17} /> : index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></button>)}</div></div></section>
+    <section className="desktop-hero page-width"><div><span className="eyebrow">PASO 02 · INTERFAZ GRÁFICA</span><h1>GitHub Desktop.<br /><em>Revisa antes de guardar.</em></h1><p>Ves cada archivo y su diff antes de crear un commit. También puedes cambiar de rama, hacer pull y publicar sin memorizar opciones de terminal.</p><div className="hero-actions"><a className="button primary" href="https://desktop.github.com/download/" rel="noreferrer" target="_blank">Descargar GitHub Desktop <Icon name="arrow" size={18} /></a><a className="button quiet" href="#como-funciona">Ver la interfaz</a></div><small>GitHub Desktop usa Git. La diferencia es que hace visible el estado antes de ejecutar una acción.</small></div><figure className="real-product-shot"><img alt="GitHub Desktop mostrando tres archivos modificados y el diff antes de crear un commit" src="/github-desktop-diff.png" /><figcaption>Captura real de GitHub Desktop: archivos a la izquierda, diff a la derecha y mensaje del commit abajo.</figcaption></figure></section>
+    <section className="desktop-purpose page-width" id="como-funciona"><div className="section-title"><div><span className="eyebrow">LEE LA PANTALLA</span><h2>Cinco zonas. Una decisión por vez.</h2></div><p>Revisa el repositorio y la rama, selecciona archivos, lee el diff y escribe un mensaje específico.</p></div><ol className="interface-legend">{[
+      ['Repositorio', 'Confirma en qué proyecto estás.'], ['Rama', 'Confirma dónde quedará el commit.'], ['Archivos', 'Marca solo los cambios relacionados.'], ['Diff', 'Lee exactamente qué agregas o eliminas.'], ['Mensaje', 'Describe una acción concreta.'],
+    ].map(([title, text], index) => <li key={title}><span>{index + 1}</span><div><strong>{title}</strong><p>{text}</p></div></li>)}</ol></section>
+    <section className="desktop-comparison page-width"><div className="section-title"><div><span className="eyebrow">GIT BASH Y GITHUB DESKTOP</span><h2>La terminal da control. Desktop reduce errores de contexto.</h2></div><p>Git Bash no es inseguro. El riesgo aparece cuando ejecutas un comando sin revisar la rama, el staging o el remoto.</p></div><div className="comparison-grid"><figure><img alt="Git Bash ejecutando git add, git commit y git push" src="/git-bash-example.png" /><figcaption>En Git Bash debes verificar por tu cuenta la rama, los archivos preparados y el destino del push.</figcaption></figure><article><span className="comparison-label"><FiTerminal aria-hidden="true" /> ANTES DE EJECUTAR</span><h3>Desktop muestra el contexto que la terminal deja implícito.</h3><ul><li><strong>Rama visible:</strong> reduce commits en la rama equivocada.</li><li><strong>Selección por archivo:</strong> evita incluir cambios no relacionados.</li><li><strong>Diff antes del commit:</strong> detecta secretos, logs y código accidental.</li><li><strong>Remoto visible:</strong> deja claro si harás fetch, pull o push.</li></ul><p>Para scripts y operaciones avanzadas, usa Git Bash. Para revisar y crear commits diarios, Desktop ofrece más señales visuales.</p></article></div></section>
+    <section className="desktop-install page-width"><div className="desktop-install-copy"><span className="eyebrow">INSTALACIÓN GUIADA</span><h2>Instala y abre tu primer repositorio.</h2><p>GitHub Desktop tiene soporte oficial para Windows y macOS. En Linux, usa Git desde la terminal u otra interfaz.</p><a href="https://docs.github.com/es/desktop/installing-and-authenticating-to-github-desktop/installing-github-desktop" rel="noreferrer" target="_blank">Leer documentación oficial <Icon name="arrow" size={15} /></a></div><div className="desktop-install-right"><div className="desktop-platforms"><article><FaWindows aria-hidden="true" /><div><strong>Windows</strong><p>Descarga el instalador oficial y ábrelo.</p><small>Windows 10 de 64 bits o posterior</small></div></article><article><FaApple aria-hidden="true" /><div><strong>macOS</strong><p>Abre el ZIP y mueve la aplicación.</p><small>macOS 12 o posterior</small></div></article><article><FaLinux aria-hidden="true" /><div><strong>Linux</strong><p>No existe una versión oficial.</p><small>Continúa con Git en terminal</small></div></article></div><div className="desktop-checklist">{desktopSteps.map((step, index) => <button className={completed.includes(step.id) ? 'done' : ''} onClick={() => onToggle(step.id)} type="button" key={step.id}><span>{completed.includes(step.id) ? <Icon name="check" size={17} /> : index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></button>)}</div></div></section>
     <section className="desktop-vocabulary page-width"><div><span className="eyebrow">TRADUCE LA INTERFAZ</span><h2>Cuando Desktop dice…</h2></div><div>{[['Changes', 'Archivos modificados que todavía no están en un commit.'], ['Commit', 'Fotografía local con un mensaje y un padre.'], ['Push origin', 'Enviar tus commits locales al repositorio remoto.'], ['Fetch / Pull', 'Buscar y traer nuevos commits del remoto.'], ['Branch', 'Un nombre móvil que apunta a un commit.']].map(([term, text]) => <article key={term}><code>{term}</code><p>{text}</p></article>)}</div></section>
     <section className="next-route-card page-width"><div><span>PASO 03</span><h3>Ya tienes las herramientas. Ahora mira Git por dentro.</h3><p>Las escenas visuales explican qué cambia realmente al hacer commit, branch, merge o rebase.</p></div><a className="button primary" href="/aprender">Abrir curso visual <Icon name="arrow" size={18} /></a></section>
   </div>
+}
+
+const commitCases = [
+  { type: 'Funcionalidad', branch: 'feat/busqueda', message: 'feat(search): agrega filtro por categoría', files: ['src/search.ts', 'src/SearchPanel.tsx', 'tests/search.test.ts'], note: 'Código, interfaz y prueba de la misma función.' },
+  { type: 'Hotfix', branch: 'hotfix/login-loop', message: 'fix(auth): evita redirección infinita al iniciar sesión', files: ['src/auth/callback.ts', 'tests/auth.test.ts'], note: 'Corrección urgente y su prueba de regresión.' },
+  { type: 'Documentación', branch: 'docs/instalacion', message: 'docs(setup): documenta instalación en Linux', files: ['README.md', 'docs/setup-linux.md'], note: 'Solo contenido relacionado con la guía.' },
+  { type: 'Refactor', branch: 'refactor/git-client', message: 'refactor(git): extrae validación de comandos', files: ['src/git/validate.ts', 'src/git/client.ts'], note: 'Mejora interna sin cambiar el comportamiento.' },
+  { type: 'Dependencias', branch: 'chore/dependencies', message: 'chore(deps): actualiza cliente de Supabase', files: ['package.json', 'package-lock.json'], note: 'Manifiesto y lockfile en el mismo commit.' },
+  { type: 'Configuración', branch: 'ci/cache-node', message: 'ci(actions): activa caché de npm', files: ['.github/workflows/ci.yml'], note: 'Un cambio aislado de automatización.' },
+]
+
+function CommitsPage() {
+  return <div className="commits-page">
+    <section className="commits-hero page-width"><span className="eyebrow">COMMITS EN PRODUCCIÓN</span><h1>Un commit.<br /><em>Una intención.</em></h1><p>Incluye los archivos que resuelven la misma tarea. Si no puedes explicar el cambio en una frase, sepáralo.</p><div className="commit-rule"><strong>Formato recomendado</strong><code>tipo(área): acción concreta</code><span>Ejemplo: <b>fix(auth): corrige expiración de sesión</b></span></div></section>
+    <section className="commit-cases page-width"><div className="section-title"><div><span className="eyebrow">CASOS REALES</span><h2>Qué archivos agrupar y cómo nombrarlos.</h2></div><p>No agregues todo con <code>git add .</code> sin revisar. Prepara archivos concretos y confirma el diff.</p></div><div className="commit-case-grid">{commitCases.map((item) => <article key={item.type}><header><span>{item.type}</span><code>{item.branch}</code></header><h3>{item.message}</h3><div>{item.files.map((file) => <code key={file}>{file}</code>)}</div><p>{item.note}</p></article>)}</div></section>
+    <section className="commit-check page-width"><div><span className="eyebrow">ANTES DEL COMMIT</span><h2>Revisa cuatro cosas.</h2></div><ol><li><span>1</span><strong>Rama correcta</strong><code>git branch --show-current</code></li><li><span>2</span><strong>Archivos concretos</strong><code>git add ruta/archivo</code></li><li><span>3</span><strong>Diff preparado</strong><code>git diff --staged</code></li><li><span>4</span><strong>Estado final</strong><code>git status</code></li></ol></section>
+    <section className="commit-avoid page-width"><div><span>NO INCLUYAS</span><strong>.env · claves · logs · builds · cambios sin relación</strong></div><a className="button primary" href="/aprender?slide=commit">Ver cómo se mueve la rama <Icon name="arrow" size={18} /></a></section>
+  </div>
+}
+
+type CommandDemo = {
+  name: string
+  syntax: string
+  use: string
+  effect: string
+  diagram: 'advance' | 'sync' | 'merge' | 'stash' | 'revert' | 'rebase'
+}
+
+const commandDemos: CommandDemo[] = [
+  { name: 'git commit', syntax: 'git commit -m "feat: agrega búsqueda"', use: 'Guarda los cambios preparados.', effect: 'Crea un commit y avanza la rama actual.', diagram: 'advance' },
+  { name: 'git push', syntax: 'git push origin mi-rama', use: 'Publica tus commits locales.', effect: 'Actualiza la rama remota; tu rama local no cambia.', diagram: 'sync' },
+  { name: 'git pull --rebase', syntax: 'git pull --rebase origin main', use: 'Trae cambios sin crear un merge innecesario.', effect: 'Actualiza la base y reproduce tus commits encima.', diagram: 'rebase' },
+  { name: 'git merge', syntax: 'git merge feature', use: 'Une otra rama con la rama actual.', effect: 'Avanza directo o crea un commit de merge.', diagram: 'merge' },
+  { name: 'git stash', syntax: 'git stash push -m "wip: formulario"', use: 'Aparta cambios todavía incompletos.', effect: 'Limpia el working tree; la rama no se mueve.', diagram: 'stash' },
+  { name: 'git revert', syntax: 'git revert <hash>', use: 'Deshace un commit que ya fue compartido.', effect: 'Crea un nuevo commit inverso; no borra historia.', diagram: 'revert' },
+]
+
+function CommandDiagram({ type }: { type: CommandDemo['diagram'] }) {
+  return <div aria-label={`Diagrama ${type}`} className={`command-diagram diagram-${type}`} role="img"><span className="branch-name">main</span><div className="command-track primary-track" /><i className="command-node node-one">a1</i><i className="command-node node-two">b2</i><i className="command-node node-three">c3</i>{type === 'advance' && <><i className="command-node new-node">d4</i><b className="movement-arrow">→</b></>}{type === 'sync' && <><div className="remote-track" /><span className="remote-name">origin/main</span><i className="remote-node">c3</i><b className="movement-arrow vertical">↓</b></>}{type === 'merge' && <><div className="feature-track" /><span className="feature-name">feature</span><i className="feature-node">f1</i><b className="merge-arrow">↘</b></>}{type === 'stash' && <><span className="stash-box">stash<br />WIP</span><b className="stash-arrow">↑</b></>}{type === 'revert' && <><i className="command-node reverted-node">d4</i><i className="command-node undo-node">e5</i><span className="revert-note">compensa d4</span></>}{type === 'rebase' && <><div className="feature-track" /><i className="feature-node old">f1</i><i className="command-node rebased-node">f1′</i><b className="rebase-arrow">↗</b></>}</div>
+}
+
+function CommandMapPage({ onView }: { onView: (slideId: string) => void }) {
+  const queryCommand = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('command')
+  const initial = Math.max(0, commandDemos.findIndex((item) => item.name === queryCommand))
+  const [activeIndex, setActiveIndex] = useState(initial)
+  const active = commandDemos[activeIndex]
+
+  useEffect(() => onView('modelo-mental'), [onView])
+
+  const choose = (index: number) => {
+    setActiveIndex(index)
+    window.history.replaceState({}, '', `/aprender?slide=modelo-mental&command=${encodeURIComponent(commandDemos[index].name)}`)
+  }
+  return <div className="command-map-page"><aside className="command-list"><header><Logo /><span>COMANDOS ESENCIALES</span><p>Selecciona un comando.</p></header>{commandDemos.map((item, index) => <button aria-pressed={index === activeIndex} className={index === activeIndex ? 'active' : ''} onClick={() => choose(index)} type="button" key={item.name}><code>{item.name}</code><span>{item.use}</span></button>)}</aside><section className="command-stage"><header><a href="/aprender?slide=commit"><Icon name="arrowLeft" size={17} /> Curso visual</a><span>{String(activeIndex + 1).padStart(2, '0')} / {String(commandDemos.length).padStart(2, '0')}</span></header><article><div className="command-copy"><span className="eyebrow">COMANDO</span><h1>{active.name}</h1><code>{active.syntax}</code><dl><div><dt>Para qué sirve</dt><dd>{active.use}</dd></div><div><dt>Qué cambia</dt><dd>{active.effect}</dd></div></dl></div><CommandDiagram type={active.diagram} /></article><div className="command-situations"><span className="eyebrow">SITUACIONES REALES</span><div><article><strong>Tienes cambios sin commit y necesitas actualizar tu rama</strong><code>git stash push -m "wip"</code><code>git pull --rebase origin main</code><code>git stash pop</code></article><article><strong>El commit equivocado ya llegó al remoto</strong><code>git log --oneline</code><code>git revert &lt;hash&gt;</code><code>git push origin mi-rama</code></article><article><strong>Tus cambios tienen commit, pero aún no hiciste push</strong><code>git fetch origin</code><code>git rebase origin/main</code><span>Resuelve conflictos, prueba y después publica.</span></article><article><strong>Solo quieres traer un archivo desde otra rama</strong><code>git restore --source otra-rama -- ruta/archivo</code><span>Revisa el diff y crea un commit nuevo.</span></article></div></div></section></div>
 }
 
 function CoursePage({ viewedSlides, onView, initialSlideId }: { viewedSlides: string[]; onView: (slideId: string) => void; initialSlideId?: string }) {
@@ -404,6 +522,10 @@ function CoursePage({ viewedSlides, onView, initialSlideId }: { viewedSlides: st
 
   const goTo = (index: number) => {
     const nextIndex = Math.max(0, Math.min(courseSlides.length - 1, index))
+    if (courseSlides[nextIndex].id === 'modelo-mental') {
+      window.location.assign(courseHref('modelo-mental'))
+      return
+    }
     setSlideIndex(nextIndex)
     window.history.replaceState({}, '', courseHref(courseSlides[nextIndex].id))
   }
@@ -553,10 +675,18 @@ function App() {
   const [viewedSlides, setViewedSlides] = useState<string[]>(() => readStoredList(COURSE_PROGRESS_KEY, slideIds))
   const [completedChallenges, setCompletedChallenges] = useState<string[]>(() => readStoredList(PRACTICE_PROGRESS_KEY, challengeIds))
   const [setupProgress, setSetupProgress] = useState<string[]>(() => readStoredList(SETUP_PROGRESS_KEY, setupIds))
+  const [user, setUser] = useState<User | null>(null)
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null)
 
   useEffect(() => window.localStorage.setItem(COURSE_PROGRESS_KEY, JSON.stringify(viewedSlides)), [viewedSlides])
   useEffect(() => window.localStorage.setItem(PRACTICE_PROGRESS_KEY, JSON.stringify(completedChallenges)), [completedChallenges])
   useEffect(() => window.localStorage.setItem(SETUP_PROGRESS_KEY, JSON.stringify(setupProgress)), [setupProgress])
+  useEffect(() => {
+    if (!supabase) return
+    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null))
+    return () => data.subscription.unsubscribe()
+  }, [])
 
   const markViewed = (slideId: string) => setViewedSlides((current) => current.includes(slideId) ? current : [...current, slideId])
   const markCompleted = (challengeId: string) => setCompletedChallenges((current) => current.includes(challengeId) ? current : [...current, challengeId])
@@ -568,6 +698,9 @@ function App() {
       setSetupProgress([])
     }
   }
+  const signOut = async () => {
+    await supabase?.auth.signOut()
+  }
 
   let page: ReactNode
   let minimal = false
@@ -575,8 +708,10 @@ function App() {
   if (path === '/') page = <HomePage completedChallenges={completedChallenges} setupProgress={setupProgress} viewedSlides={viewedSlides} />
   else if (path === '/instalar') page = <InstallationPage completed={setupProgress} onToggle={toggleSetup} />
   else if (path === '/github-desktop') page = <GitHubDesktopPage completed={setupProgress} onToggle={toggleSetup} />
+  else if (path === '/commits') page = <CommitsPage />
   else if (path === '/aprender' || path === '/fundamentos') {
-    page = <CoursePage initialSlideId={path === '/fundamentos' ? 'commit' : undefined} onView={markViewed} viewedSlides={viewedSlides} />
+    const requestedSlide = typeof window === 'undefined' ? undefined : new URLSearchParams(window.location.search).get('slide') ?? undefined
+    page = path === '/aprender' && (!requestedSlide || requestedSlide === 'modelo-mental') ? <CommandMapPage onView={markViewed} /> : <CoursePage initialSlideId={path === '/fundamentos' ? 'commit' : undefined} onView={markViewed} viewedSlides={viewedSlides} />
     minimal = true
   } else if (path === '/ramas-y-prs') {
     page = <CoursePage initialSlideId="ramas" onView={markViewed} viewedSlides={viewedSlides} />
@@ -587,9 +722,7 @@ function App() {
   } else if (path === '/progreso') page = <ProgressPage completedChallenges={completedChallenges} onReset={resetProgress} setupProgress={setupProgress} viewedSlides={viewedSlides} />
   else page = <NotFoundPage />
 
-  const learnedCount = viewedSlides.length + completedChallenges.length + setupProgress.length
-  const totalCount = courseSlides.length + challenges.length + SETUP_STEP_IDS.length
-  return <AppShell learnedCount={learnedCount} minimal={minimal} path={path} totalCount={totalCount}>{page}</AppShell>
+  return <><AppShell minimal={minimal} onOpenAuth={setAuthMode} onSignOut={signOut} path={path} user={user}>{page}</AppShell>{authMode && <AuthDialog mode={authMode} onClose={() => setAuthMode(null)} onModeChange={setAuthMode} />}</>
 }
 
 export default App

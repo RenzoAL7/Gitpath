@@ -7,9 +7,10 @@ GitPath es una ruta visual en español para aprender Git desde cero. Empieza ant
 | Etapa | Ruta | Qué aprende la persona |
 | --- | --- | --- |
 | 1. Preparar | `/instalar` | Cómo instalar y comprobar Git según su sistema, y cómo configurar nombre y correo. |
-| 2. Usar una interfaz | `/github-desktop` | Para qué sirve GitHub Desktop y cómo se relacionan Changes, Commit, Push, Pull y Branch. |
-| 3. Entender | `/aprender` | Commits, grafos, ramas, `HEAD`, staging, recuperación, rebase y reflog mediante nueve escenas. |
-| 4. Practicar | `/ejercicios` | Cinco niveles básicos con commits, ramas, merge, `HEAD` separado y rebase. |
+| 2. Usar una interfaz | `/github-desktop` | Para qué sirve GitHub Desktop, cómo leer un diff y cuándo usar Git Bash. |
+| 3. Crear commits | `/commits` | Cómo agrupar archivos de funcionalidad, hotfix, documentación, refactor, dependencias y CI. |
+| 4. Entender | `/aprender` | Qué hacen `commit`, `push`, `pull --rebase`, `merge`, `stash` y `revert` sobre el grafo. |
+| 5. Practicar | `/ejercicios` | Cinco niveles básicos con commits, ramas, merge, `HEAD` separado y rebase. |
 | Progreso | `/progreso` | Checks de preparación, escenas vistas y niveles completados, guardados localmente. |
 
 Las páginas de instalación enlazan a las fuentes oficiales de [Git](https://git-scm.com/install/) y [GitHub Desktop](https://docs.github.com/es/desktop/installing-and-authenticating-to-github-desktop/installing-github-desktop). GitHub Desktop se presenta como aplicación oficialmente disponible para Windows y macOS; en Linux se recomienda continuar con Git en terminal o una interfaz alternativa.
@@ -37,7 +38,8 @@ React + TypeScript + Vite
   ├── src/data/challenges.ts             mundos y niveles del laboratorio
   ├── src/lib/challenge-simulator.ts     motor determinista del grafo
   ├── src/components/GraphBoard.tsx      visualización de commits y punteros
-  ├── src/App.tsx                        rutas, onboarding, curso y progreso
+  ├── src/lib/supabase.ts                cliente de autenticación
+  ├── src/App.tsx                        rutas, cuentas, onboarding, curso y progreso
   └── src/index.css                      sistema visual responsive
 
 CI/CD
@@ -46,14 +48,17 @@ CI/CD
                  → Argo CD → rolling update en K3s
 ```
 
-El progreso usa `localStorage`; no requiere cuenta ni envía datos a un servidor.
+Las cuentas usan Supabase Auth con correo y contraseña. El progreso continúa guardándose en `localStorage`; iniciar sesión no lo sincroniza todavía entre dispositivos.
 
 ## Desarrollo local
 
 ```bash
 npm ci
+cp .env.example .env.local
 npm run dev
 ```
+
+Configura en `.env.local` la URL y la clave publicable de Supabase. La clave `sb_publishable_…` está diseñada para clientes públicos; nunca uses una clave `service_role` en Vite ni en el navegador.
 
 Validación completa:
 
