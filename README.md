@@ -28,8 +28,8 @@ React + TypeScript + Vite
 
 CI/CD
   GitHub Actions → imagen multi-arquitectura en GHCR
-                → PR de promoción en K3s-Cortex
-                → Argo CD → K3s
+                → PR de promoción y merge automático en K3s-Cortex
+                → Argo CD → rolling update en K3s
 ```
 
 El simulador es deliberadamente determinista y local en esta primera etapa. Eso permite practicar sin credenciales, sin riesgo para repositorios reales y sin depender de una API durante la lección.
@@ -60,7 +60,7 @@ npm run build
 
 Cada pull request hacia `main` instala las dependencias, ejecuta el audit de producción, los tests del simulador y valida el build de frontend y la imagen Docker.
 
-Al hacer merge a `main`, GitHub Actions publica una imagen multi-arquitectura (`amd64` y `arm64`) en GHCR con un tag inmutable basado en el SHA del commit. Después abre un PR en `K3s-Cortex` para que Argo CD sincronice el nuevo estado deseado.
+Al hacer merge a `main`, GitHub Actions publica una imagen multi-arquitectura (`amd64` y `arm64`) en GHCR con un tag inmutable basado en el SHA del commit. Después abre o actualiza el PR de promoción en `K3s-Cortex`, verifica su commit exacto y lo fusiona automáticamente. Argo CD detecta el cambio y ejecuta el rolling update sin comandos manuales sobre el Deployment.
 
 ## Roadmap
 

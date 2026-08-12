@@ -96,7 +96,7 @@ jobs:
           sbom: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
   update-gitops:
-    name: Propose GitOps image update
+    name: Promote image through GitOps
     needs: container
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -122,7 +122,8 @@ jobs:
           grep -n "newTag:" "$MANIFEST"
           git diff --check
 
-      - name: Open GitOps pull request
+      - name: Open or update GitOps pull request
+        id: promotion
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.CORTEX_REPO_TOKEN }}
@@ -142,4 +143,30 @@ jobs:
             - Image: `ghcr.io/renzoal7/gitpath:sha-${{ github.sha }}`
             - Argo CD application: `gitpath-prod`
 
-            Merge this PR to let Argo CD synchronize the production workload.
+            This PR is merged automatically after the release image is published.
+
+      - name: Merge GitOps promotion
+        if: steps.promotion.outputs.pull-request-number != ''
+        working-directory: cortex
+        env:
+          GH_TOKEN: ${{ secrets.CORTEX_REPO_TOKEN }}
+          PR_NUMBER: ${{ steps.promotion.outputs.pull-request-number }}
+          PR_HEAD_SHA: ${{ steps.promotion.outputs.pull-request-head-sha }}
+        run: |
+          for attempt in 1 2 3; do
+            if gh pr merge "$PR_NUMBER" \
+              --repo RenzoAL7/K3s-Cortex \
+              --squash \
+              --delete-branch \
+              --match-head-commit "$PR_HEAD_SHA"; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "GitHub is still evaluating the promotion PR; retrying in 5 seconds."
+              sleep 5
+            fi
+          done
+
+          echo "The GitOps promotion PR could not be merged automatically."
+          exit 1
