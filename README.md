@@ -1,16 +1,17 @@
 # GitPath
 
-GitPath es una plataforma educativa para aprender Git resolviendo situaciones que aparecen en un equipo real: cambios sin guardar, ramas de trabajo, incidentes en producción, conflictos de merge y recuperación con `reflog`.
+GitPath es una experiencia educativa visual para entender Git antes de memorizar comandos. El curso explica commits, grafos, ramas, `HEAD`, staging, `rebase` y `reflog` como una presentación breve; después ofrece un laboratorio opcional con situaciones que aparecen en un equipo real.
 
 La inspiración conceptual es [Learn Git Branching](https://github.com/pcottle/learnGitBranching), pero el enfoque de GitPath está orientado a la toma de decisiones: cada comando aparece dentro de un incidente, muestra su efecto y explica el riesgo de usarlo mal.
 
 ## Qué existe hoy
 
-- Ruta de cinco escenarios, desde el primer commit hasta un rescate con `reflog`.
-- Laboratorio interactivo con comandos guiados, transcript de terminal y visualización del repositorio.
+- Curso visual de nueve escenas, navegable con botones, indicadores o las flechas del teclado.
+- Cuatro capítulos inspirados en el modelo interno de Git: objetos, punteros, selección de cambios y recuperación.
+- Laboratorio independiente con cinco escenarios, comandos guiados, transcript de terminal y visualización del repositorio.
 - Estado simulado para ramas, `HEAD`, staging, conflictos y commits.
 - Feedback contextual cuando el comando no resuelve el paso actual.
-- Progreso persistido localmente con `localStorage`, sin enviar datos personales.
+- Progreso separado para el curso y las prácticas, persistido localmente con `localStorage`.
 - Casos de fallo con síntoma, riesgo y comando de rescate.
 - Build reproducible con Docker, Nginx, GitHub Actions, GHCR y promoción GitOps hacia K3s.
 - Suite de comportamiento con Node test runner para validar el orden y el resultado de los comandos.
@@ -19,7 +20,8 @@ La inspiración conceptual es [Learn Git Branching](https://github.com/pcottle/l
 
 ```text
 React + TypeScript + Vite
-  ├── src/data/lessons.ts       catálogo de contenido
+  ├── src/data/course.ts        contenido del curso visual
+  ├── src/data/lessons.ts       catálogo de prácticas
   ├── src/lib/git-simulator.ts  motor determinista de prácticas
   ├── src/App.tsx               navegación, laboratorio y progreso
   └── src/index.css             sistema visual responsive
@@ -34,10 +36,10 @@ El simulador es deliberadamente determinista y local en esta primera etapa. Eso 
 
 ## Cómo se usa la ruta
 
-1. Elige una guía en **Fundamentos** o **Ramas y PRs** para entender el contexto antes de abrir la terminal.
-2. En el **Laboratorio**, lee el escenario y prueba el comando que creas correcto. El panel muestra qué paso sigue y por qué.
+1. Empieza en **Curso visual** y avanza por una idea a la vez. Cada escena combina una explicación corta con un modelo gráfico.
+2. Cuando quieras probar lo aprendido, abre el **Laboratorio**, elige un escenario y escribe el comando que creas correcto.
 3. Si te bloqueas, puedes usar el comando sugerido como punto de partida y modificarlo antes de ejecutarlo. No sustituye la explicación ni completa la misión por ti.
-4. Al completar una misión, el avance se guarda únicamente en `localStorage` del navegador. Puedes retomar la siguiente práctica desde Inicio o Progreso.
+4. Las escenas vistas y las misiones completadas se guardan únicamente en `localStorage`. Puedes retomar ambas rutas desde Inicio o Progreso.
 
 La navegación mantiene las rutas visibles también en móvil, de modo que se puede cambiar de contexto sin perder la práctica actual.
 
